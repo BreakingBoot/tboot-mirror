@@ -51,12 +51,3 @@ if __name__ == "__main__":
   
   print packedHash
   print joinedHash
-
-
-  #packed = e.packHash('SHA256', sha256data)
-  #print packed
-  #e.packHash('SHA384')
-  #e.packHash('SHA512')
-  
-  
-    
