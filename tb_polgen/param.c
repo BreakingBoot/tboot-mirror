@@ -51,7 +51,7 @@
 
 static const char *help[] = {
     "tb_polgen --create --type        nonfatal|continue|halt\n",
-    "                   [--alg        sha1 (default)|sha256|sha384|sha512]\n",
+    "                   [--alg        sha1|sha256 (default)|sha384|sha512]\n",
     "                   [--ctrl       <policy control value>]\n",
     "                   [--verbose]\n",
     "                   <policy file name>\n",
@@ -330,7 +330,7 @@ bool parse_input_params(int argc, char **argv, param_data_t *params)
     params->cmd = POLGEN_CMD_NONE;
     params->mod_num = -1;
     params->pcr = -1;
-    params->hash_alg = TB_HALG_SHA1;
+    params->hash_alg = TB_HALG_SHA256;
     params->policy_type = -1;
     params->policy_control = TB_POLCTL_EXTEND_PCR17;
     params->hash_type = -1;

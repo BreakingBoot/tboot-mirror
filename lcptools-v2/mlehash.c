@@ -70,8 +70,8 @@ static char help[MAX_HELP_TEXT] =
 
 
 bool        verbose = false;
-char        alg_name[32] = "sha1";
-uint16_t    alg_type = TPM_ALG_SHA1;
+char        alg_name[32] = "sha256";
+uint16_t    alg_type = TPM_ALG_SHA256;
 
 static struct option long_opts[] =
 {
