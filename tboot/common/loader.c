@@ -363,6 +363,7 @@ grow_mb2_tag(loader_ctx *lctx, struct mb2_tag *which, uint32_t how_much)
     if (growth > slack){
         printk(TBOOT_ERR"YIKES!!! grow_mb2_tag slack %d < growth %d\n",
                slack, growth);
+        apply_policy(TB_ERR_FATAL);
     }
 
     /* now we copy down from the bottom, going up */
