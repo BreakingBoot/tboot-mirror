@@ -144,6 +144,8 @@ efi_mem_descr_t* efi_memmap_walk(efi_mem_descr_t* prev)
  * Region has to be aligned to page size, function will round non-aligned
  * values. Base address is rounded down, length - up.
  * 
+ * If the specified region lies within a gap, a new region will be added
+ *
  * @param base   starting address
  * @param length length of region to reserve
  */
@@ -164,6 +166,7 @@ bool efi_memmap_reserve(uint64_t base, uint64_t length)
     uint64_t end = base + length;
     efi_mem_descr_t* desc = NULL;
     uint32_t i = 0;
+    bool in_range = false;
 
     while ((desc = efi_memmap_walk(desc)) != NULL) {
         uint64_t desc_base = desc->physical_start;
@@ -184,6 +187,9 @@ bool efi_memmap_reserve(uint64_t base, uint64_t length)
         if (base >= desc_end) {
             goto cont;
         }
+
+        /* In all cases below, the current range is involved */
+        in_range = true;
 
         /* case 1: the current ram range is within the range:
            base, desc_base, desc_end, end */
@@ -248,6 +254,15 @@ bool efi_memmap_reserve(uint64_t base, uint64_t length)
 
         cont:
         ++i;
+    }
+
+    /* Insert the new region */
+    if ( !in_range ) {
+
+        desc = efi_memmap_walk(NULL);
+        if( !insert_after_region(0, base, length, EFI_RESERVED_TYPE, 0) ) {
+            return false;
+        }
     }
 
     return true;
