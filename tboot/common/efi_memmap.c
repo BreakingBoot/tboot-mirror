@@ -335,6 +335,12 @@ bool efi_memmap_get_highest_sized_ram(uint64_t size, uint64_t limit,
     }
 }
 
+
+bool efi_memmap_present(void)
+{
+    return efi_mmap_available;
+}
+
 static bool insert_after_region(uint32_t pos, uint64_t addr, uint64_t size,
                                 uint32_t type, uint64_t attr)
 {
