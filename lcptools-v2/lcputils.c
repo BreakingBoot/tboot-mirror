@@ -50,6 +50,12 @@
 #include <openssl/ecdsa.h>
 #include <openssl/ec.h>
 #include <openssl/evp.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    #include <openssl/core.h>
+    #include <openssl/decoder.h>
+    #include <openssl/crypto.h>
+    #include <openssl/param_build.h>
+#endif
 #include <safe_lib.h>
 #include <snprintf_s.h>
 #define PRINT   printf
@@ -512,77 +518,164 @@ Out: true/false on verification success or failure
     int status;
     EVP_PKEY_CTX *evp_context = NULL;
     EVP_PKEY *evp_key = NULL;
-    RSA *rsa_pubkey = NULL;
     BIGNUM *modulus = NULL;
     BIGNUM *exponent = NULL;
     tb_hash_t *digest = NULL;
     unsigned char exp_arr[] = {0x01, 0x00, 0x01};
+    unsigned char *decrypted_sig = NULL;
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        size_t dcpt_sig_len;
+    #else
+        RSA *rsa_pubkey = NULL;
+    #endif
 
     LOG("[verify_rsa_signature]\n");
     if (data == NULL || pubkey == NULL || signature == NULL) {
         ERROR("Error: list data, pubkey or signature buffer not defined.\n");
         return false;
     }
-    uint8_t decrypted_sig[pubkey->size];
-
-    //1. Create public key
-    rsa_pubkey = RSA_new();
-    if ( rsa_pubkey == NULL ) {
-        ERROR("Error: failed to allocate key\n");
-        status = 0;
-        goto EXIT;
-    }
-
+    
     modulus = BN_bin2bn(pubkey->data, pubkey->size, NULL);
     exponent = BN_bin2bn(exp_arr, 3, NULL);
-    if (modulus == NULL) {
-        goto OPENSSL_ERROR;
-    }
-    if (exponent == NULL) {
+    if ( modulus == NULL || exponent == NULL ) {
+        ERROR("Error: failed to convert modulus and/or exponent.\n");
         goto OPENSSL_ERROR;
     }
 
-    #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-        RSA_set0_key(rsa_pubkey, modulus, exponent, NULL);
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        evp_context = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL);
+        if ( evp_context == NULL) {
+            ERROR("Error: failed to initialize CTX from name.\n");
+            goto OPENSSL_ERROR;
+        }    
+
+        OSSL_PARAM_BLD *params_build = OSSL_PARAM_BLD_new();
+        if ( params_build == NULL ) {
+            ERROR("Error: failed to set up parameter builder.\n");
+            goto OPENSSL_ERROR;
+        }
+        if ( !OSSL_PARAM_BLD_push_BN(params_build, "n", modulus) ) {
+            ERROR("Error: failed to push modulus into param build.\n");
+            goto OPENSSL_ERROR;
+        }
+        if ( !OSSL_PARAM_BLD_push_BN(params_build, "e", exponent) ) {
+            ERROR("Error: failed to push exponent into param build.\n");
+            goto OPENSSL_ERROR;
+        }
+        if ( !OSSL_PARAM_BLD_push_BN(params_build, "d", NULL) ) {
+            ERROR("Error: failed to push NULL into param build.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(params_build);
+        if ( params == NULL ) {
+            ERROR("Error: failed to construct parameters from builder.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        if ( EVP_PKEY_fromdata_init(evp_context) <= 0 ) {
+            ERROR("Error: failed to initialize key creation.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        if ( EVP_PKEY_fromdata(evp_context, &evp_key, EVP_PKEY_PUBLIC_KEY, params) <= 0 ) {
+            ERROR("Error: failed to create key.\n");
+            goto OPENSSL_ERROR;
+        }
+        OSSL_PARAM_free(params);
+        OSSL_PARAM_BLD_free(params_build);
+        EVP_PKEY_CTX_free(evp_context);
+        evp_context = NULL;
     #else
-        rsa_pubkey->n = modulus;
-        rsa_pubkey->e = exponent;
-        rsa_pubkey->d = rsa_pubkey->p = rsa_pubkey->q = NULL;
+        rsa_pubkey = RSA_new();
+        if ( rsa_pubkey == NULL ) {
+            ERROR("Error: failed to allocate key\n");
+            status = 0;
+            goto EXIT;
+        }
+
+        #if OPENSSL_VERSION_NUMBER >= 0x10100000L
+        RSA_set0_key(rsa_pubkey, modulus, exponent, NULL);
+        #else
+            rsa_pubkey->n = modulus;
+            rsa_pubkey->e = exponent;
+            rsa_pubkey->d = rsa_pubkey->p = rsa_pubkey->q = NULL;
+        #endif
     #endif
 
     if (MAJOR_VER(list_ver) != MAJOR_VER(LCP_TPM20_POLICY_LIST2_1_VERSION_300)) {
-        //Decrypt signature - we will need to to find hashalg
-        status = RSA_public_decrypt(pubkey->size, signature->data, decrypted_sig, 
-                            rsa_pubkey, RSA_NO_PADDING);
-        if (status <= 0) {
-            ERROR("Error: failed to decrypt signature.\n");
-            goto OPENSSL_ERROR;
-        }
-        if (verbose) {
-            LOG("Decrypted signature: \n");
-            print_hex("", decrypted_sig, pubkey->size);
-        }
+        #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+
+            evp_context = EVP_PKEY_CTX_new(evp_key, NULL);
+            if ( evp_context == NULL ) {
+                ERROR("Error: failed to instatiate CTX.\n");
+                goto OPENSSL_ERROR;
+            }
+            if ( EVP_PKEY_encrypt_init(evp_context) <= 0 ) {
+                ERROR("Error: failed to initialize signature decryption.\n");
+                goto OPENSSL_ERROR;
+            }
+            if ( EVP_PKEY_CTX_set_rsa_padding(evp_context, RSA_NO_PADDING) <= 0 ) {
+                ERROR("Error: failed to set RSA padding.\n");
+                goto OPENSSL_ERROR;
+            }
+            if ( EVP_PKEY_encrypt(evp_context, NULL, &dcpt_sig_len, signature->data, pubkey->size) <= 0 ) {
+                ERROR("Error: failed to retrieve decrypted signature length.\n");
+                goto OPENSSL_ERROR;
+            }
+            decrypted_sig = OPENSSL_malloc(dcpt_sig_len);
+            if ( decrypted_sig == NULL ) {
+                ERROR("Error: failed to allocate memory for decrypted signature.\n");
+                status = 0;
+                goto EXIT;
+            }
+            if ( EVP_PKEY_encrypt(evp_context, decrypted_sig, &dcpt_sig_len, signature->data, pubkey->size) <= 0 ) {
+                ERROR("Error: failed to decrypt signature.\n");
+                goto OPENSSL_ERROR;
+            }
+            if ( verbose ) {
+                LOG("Decrypted signature: \n");
+                print_hex("", decrypted_sig, dcpt_sig_len);
+            }
+            EVP_PKEY_CTX_free(evp_context);
+            evp_context = NULL;
+        #else
+            decrypted_sig = OPENSSL_malloc(pubkey->size);
+            status = RSA_public_decrypt(pubkey->size, signature->data, decrypted_sig, rsa_pubkey, RSA_NO_PADDING);
+            if (status <= 0) {
+                ERROR("Error: failed to decrypt signature.\n");
+                goto OPENSSL_ERROR;
+            }
+            if ( verbose ) {
+                LOG("Decrypted signature: \n");
+                print_hex("", decrypted_sig, pubkey->size);
+            }
+        #endif
         //In older lists we need to get hashAlg from signature data.
         hashAlg = pkcs_get_hashalg((const unsigned char *) decrypted_sig);
+        OPENSSL_free((void *) decrypted_sig);
     }
 
-    evp_key = EVP_PKEY_new();
-    if ( evp_key == NULL) {
-        goto OPENSSL_ERROR;
-    }
+    #if OPENSSL_VERSION_NUMBER < 0x30000000L
+        evp_key = EVP_PKEY_new();
+        if ( evp_key == NULL) {
+            goto OPENSSL_ERROR;
+        }
 
-    status = EVP_PKEY_set1_RSA(evp_key, rsa_pubkey);
-    if (status <= 0) {
-        goto OPENSSL_ERROR;
-    }
+        status = EVP_PKEY_set1_RSA(evp_key, rsa_pubkey);
+        if (status <= 0) {
+            goto OPENSSL_ERROR;
+        }
+    #endif
 
     evp_context = EVP_PKEY_CTX_new(evp_key, NULL);
-    if ( evp_context == NULL) {
+    if ( evp_context == NULL ) {
+        ERROR("Error: failed to initialize CTX from pkey.\n");
         goto OPENSSL_ERROR;
     }
 
-    status = EVP_PKEY_verify_init(evp_context);
-    if ( status <= 0) {
+    if ( EVP_PKEY_verify_init(evp_context) <= 0) {
+        ERROR("Error: failed to initialize verification.");
         goto OPENSSL_ERROR;
     }
 
@@ -596,44 +689,38 @@ Out: true/false on verification success or failure
         goto EXIT;
     }
     if ( status <= 0) {
+        ERROR("Error: failed to set rsa padding.\n");
         goto OPENSSL_ERROR;
     }
 
-    switch ( hashAlg) {
-        case TPM_ALG_SHA1:
-        if ( EVP_PKEY_CTX_set_signature_md(evp_context, EVP_sha1()) <= 0 ) {
-            goto OPENSSL_ERROR;
-        }
-        break;
-        case TPM_ALG_SHA256:
-        if ( EVP_PKEY_CTX_set_signature_md(evp_context, EVP_sha256()) <= 0 ) {
-            goto OPENSSL_ERROR;
-        }
-        break;
-        case TPM_ALG_SHA384:
-        if ( EVP_PKEY_CTX_set_signature_md(evp_context, EVP_sha384()) <= 0 ) {
-            goto OPENSSL_ERROR;
-        }
-        break;
-        default:
+    if ( hashAlg == TPM_ALG_SHA1 ) {
+        status = EVP_PKEY_CTX_set_signature_md(evp_context, EVP_sha1());
+    } else if ( hashAlg == TPM_ALG_SHA256 ) {
+        status = EVP_PKEY_CTX_set_signature_md(evp_context, EVP_sha256());
+    } else if ( hashAlg == TPM_ALG_SHA384 ) {
+        status = EVP_PKEY_CTX_set_signature_md(evp_context, EVP_sha384());
+    } else {
         ERROR("Error: Unknown hash alg.\n");
         status = 0;
         goto EXIT;
     }
+    if ( status <= 0 ) {
+        ERROR("Error: failed to set signature message digest.\n");
+        goto OPENSSL_ERROR;
+    }
+    
     digest = malloc(get_lcp_hash_size(hashAlg));
     if (digest == NULL) {
         ERROR("Error: failed to allocate digest");
         status = 0;
         goto EXIT;
     }
-    status = hash_buffer((const unsigned char *) data->data, data->size, digest,
-                                                                        hashAlg);
-    if (!status) {
+    if ( !hash_buffer((const unsigned char *) data->data, data->size, digest, hashAlg) ) {
         ERROR("Error: failed to hash list contents.\n");
+        status = 0;
         goto EXIT;
     }
-    status = EVP_PKEY_verify(evp_context, signature->data, pubkey->size,
-                     (const unsigned char *) digest, get_lcp_hash_size(hashAlg));
+    status = EVP_PKEY_verify(evp_context, signature->data, pubkey->size, (const unsigned char *) digest, get_lcp_hash_size(hashAlg));
     if (status < 0) { //Error occurred
         goto OPENSSL_ERROR;
     }
@@ -646,12 +733,14 @@ Out: true/false on verification success or failure
         ERR_free_strings();
         status = 0;
     EXIT:
+        #if OPENSSL_VERSION_NUMBER < 0x30000000L
+            if (rsa_pubkey != NULL)
+                OPENSSL_free((void *) rsa_pubkey);
+        #endif
         if (evp_context != NULL)
             OPENSSL_free((void *) evp_context);
         if (evp_key != NULL)
             OPENSSL_free((void *) evp_key);
-        if (rsa_pubkey != NULL)
-            OPENSSL_free((void *) rsa_pubkey);
         if (modulus != NULL)
             OPENSSL_free((void *) modulus);
         if (exponent != NULL)
@@ -686,101 +775,182 @@ bool verify_ec_signature(sized_buffer *data, sized_buffer *pubkey_x,
 
     Out: true/false on verification success or failure
 */
-    //Stuff to make key with:
+    int result;
     BIGNUM *x = NULL;
     BIGNUM *y = NULL;
-    EC_KEY *ec_key = NULL;
-    EC_GROUP *ec_group = NULL;
     EVP_PKEY *evp_key = NULL;
-    const EVP_MD *mdtype; //Is freed when context is freed
-
-    //Der encoded signature:
+    const EVP_MD *mdtype;
     const unsigned char *der_encoded_sig = NULL;
     int encoded_len;
     int curveId = 0;
-
-    //Contexts:
-    EVP_MD_CTX *mctx = NULL; //Message Digest Context
-    EVP_PKEY_CTX *pctx = NULL; //Key context   
-
-    //Other:
-    int result;
-
+    EVP_MD_CTX *mctx = NULL;
+    EVP_PKEY_CTX *pctx = NULL;
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L  
+        const EC_GROUP *ec_group = NULL;
+        EC_POINT *ec_point = NULL;
+        unsigned char *point_buffer = NULL;
+        size_t pt_buf_len;
+        BN_CTX *bctx = NULL;
+        const char *curveName = NULL;
+    #else
+        EC_KEY *ec_key = NULL;
+        EC_GROUP *ec_group = NULL;
+    #endif
+    
     LOG("[verify_ec_signature]\n");
-    if (data == NULL || pubkey_x == NULL || pubkey_y == NULL ||
-        sig_r == NULL || sig_s == NULL) {
-            ERROR("Error: one or more buffers are not defined.\n");
-            return false;
-        }
-    ec_key = EC_KEY_new();
-    if (ec_key == NULL) {
-        ERROR("Error: failed to generate EC_KEY.\n");
-        result = 0;
-        goto EXIT;
+    if ( data == NULL || pubkey_x == NULL || pubkey_y == NULL || sig_r == NULL || sig_s == NULL ) {
+        ERROR("Error: one or more buffers are not defined.\n");
+        return false;
     }
-    evp_key = EVP_PKEY_new();
-    if (evp_key == NULL) {
-        ERROR("Error: failed to generate EC_KEY.\n");
-        result = 0;
-        goto EXIT;
-    }
-    switch (hashalg)
-    {
-    case TPM_ALG_SM3_256:
+    
+    if ( hashalg == TPM_ALG_SM3_256 ) {
         curveId = NID_sm2;
         mdtype = EVP_sm3();
-        break;
-    case TPM_ALG_SHA256:
+        #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            curveName = SN_sm2;
+        #endif
+    } else if ( hashalg == TPM_ALG_SHA256 ) {
         curveId = NID_secp256k1;
         mdtype = EVP_sha256();
-        break;
-    case TPM_ALG_SHA384:
+        #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            curveName = SN_secp256k1;
+        #endif
+    } else if ( hashalg == TPM_ALG_SHA384 ) {
         curveId = NID_secp384r1;
         mdtype = EVP_sha384();
-        break;
-    default:
+        #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            curveName = SN_secp384r1;
+        #endif
+    } else {
         ERROR("Error: unsupported hashalg.\n");
         result = 0;
         goto EXIT;
     }
+
     ec_group = EC_GROUP_new_by_curve_name(curveId);
-    if (ec_group == NULL) {
-        ERROR("Error: failed to generate new EC_GROUP.\n");
+    if ( ec_group == NULL ) {
+        ERROR("Error: failed to create new EC group.\n");
         goto OPENSSL_ERROR;
     }
-    result = EC_KEY_set_group(ec_key, ec_group);
-    if ( result <= 0) {
-        ERROR("Failed to set EC Key group.\n");
-        goto OPENSSL_ERROR;
-    }
+
     x = BN_bin2bn(pubkey_x->data, pubkey_x->size, NULL);
     y = BN_bin2bn(pubkey_y->data, pubkey_y->size, NULL);
     if ( x == NULL || y == NULL ) {
-        ERROR("Failed to convert buffer to OpenSSL BN.\n");
+        ERROR("Error: Failed to convert binary pubkey to BIGNUM x and/or y.\n");
         goto OPENSSL_ERROR;
     }
-    result = EC_KEY_set_public_key_affine_coordinates(ec_key, x, y);
-    if ( result <= 0) {
-        ERROR("Failed to set key coordinates.\n");
-        goto OPENSSL_ERROR;
-    }
-    result = EVP_PKEY_assign_EC_KEY(evp_key, ec_key);
-    if (result <= 0) {
-        ERROR("Error: failed to assign EC KEY to EVP structure.\n");
-        goto OPENSSL_ERROR;
-    }
+
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        ec_point = EC_POINT_new(ec_group);
+        if ( ec_point == NULL ) {
+            ERROR("Error: failed to create new EC point.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        bctx = BN_CTX_new();
+        if ( bctx == NULL ) {
+            ERROR("Error: Failed to create BIGNUM context.\n");
+            goto OPENSSL_ERROR;
+        }
+        
+        if ( EC_POINT_set_affine_coordinates(ec_group, ec_point, x, y, bctx) <= 0 ) {
+            ERROR("Error: failed to set affine coordinates.\n");
+            goto OPENSSL_ERROR;
+        }
+        
+        BN_CTX_free(bctx);
+        bctx = NULL;
+        bctx = BN_CTX_new();
+
+        pt_buf_len = EC_POINT_point2oct(ec_group, ec_point, POINT_CONVERSION_COMPRESSED, NULL, 0, bctx);
+        point_buffer = OPENSSL_malloc(pt_buf_len);
+        if ( point_buffer == NULL ) {
+            ERROR("Error: failed to allocate point buffer.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        if ( EC_POINT_point2oct(ec_group, ec_point, POINT_CONVERSION_COMPRESSED, point_buffer, pt_buf_len, bctx) <= 0 ) {
+            ERROR("Error: failed to convert EC point into octal string.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+        if ( ctx == NULL ) {
+            ERROR("Error: failed to initialize key creation CTX.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        OSSL_PARAM_BLD *params_build = OSSL_PARAM_BLD_new();
+        if ( params_build == NULL ) {
+            ERROR("Error: failed to set up parameter builder.\n");
+            goto OPENSSL_ERROR;
+        }
+        if ( !OSSL_PARAM_BLD_push_utf8_string(params_build, "group", curveName, 0) ) {
+            ERROR("Error: failed to push group into param build.\n");
+            goto OPENSSL_ERROR;
+        }
+        if ( !OSSL_PARAM_BLD_push_octet_string(params_build, "pub", point_buffer, pt_buf_len) ) {
+            ERROR("Error: failed to push pubkey into param build.\n");
+            goto OPENSSL_ERROR;
+        }
+        OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(params_build);
+        if ( params == NULL ) {
+            ERROR("Error: failed to construct params from build.\n");
+            goto OPENSSL_ERROR;
+        }
+
+        if ( EVP_PKEY_fromdata_init(ctx) <= 0 ) {
+            ERROR("ERROR: failed to initialize key creation from data.\n");
+            goto OPENSSL_ERROR;
+        }
+        if ( EVP_PKEY_fromdata(ctx, &evp_key, EVP_PKEY_PUBLIC_KEY, params) <= 0) {
+            ERROR("Error: failed to create EC_KEY.\n");
+            result = 0;
+            goto EXIT;
+        }
+        OSSL_PARAM_BLD_free(params_build);
+        OSSL_PARAM_free(params);
+        EVP_PKEY_CTX_free(ctx);
+        BN_CTX_free(bctx);
+    #else
+        ec_key = EC_KEY_new();
+        if (ec_key == NULL) {
+            ERROR("Error: failed to generate EC_KEY.\n");
+            result = 0;
+            goto EXIT;
+        }
+        evp_key = EVP_PKEY_new();
+        if (evp_key == NULL) {
+            ERROR("Error: failed to generate EC_KEY.\n");
+            result = 0;
+            goto EXIT;
+        }
+        if ( EC_KEY_set_group(ec_key, ec_group) <= 0) {
+            ERROR("Failed to set EC Key group.\n");
+            goto OPENSSL_ERROR;
+        }
+        if ( EC_KEY_set_public_key_affine_coordinates(ec_key, x, y) <= 0) {
+            ERROR("Failed to set key coordinates.\n");
+            goto OPENSSL_ERROR;
+        }
+        
+        if ( EVP_PKEY_assign_EC_KEY(evp_key, ec_key) <= 0) {
+            ERROR("Error: failed to assign EC KEY to EVP structure.\n");
+            goto OPENSSL_ERROR;
+        }
+        if (sigalg == TPM_ALG_SM2) {
+            if ( EVP_PKEY_set_alias_type(evp_key, EVP_PKEY_SM2) <= 0 ) {
+                ERROR("Error: failed to set EVP KEY alias to SM2.\n");
+                goto OPENSSL_ERROR;
+            }
+        }
+    #endif
+
     mctx = EVP_MD_CTX_new();
     if (mctx == NULL) {
         ERROR("Error: failed to generate message digest context.\n");
         result = 0;
         goto EXIT;
-    }
-    if (sigalg == TPM_ALG_SM2) {
-        result = EVP_PKEY_set_alias_type(evp_key, EVP_PKEY_SM2);
-        if (result <= 0) {
-            ERROR("Error: failed to set EVP KEY alias to SM2.\n");
-            goto OPENSSL_ERROR;
-        }
     }
     pctx = EVP_PKEY_CTX_new(evp_key, NULL);
     if (pctx == NULL) {
@@ -789,8 +959,7 @@ bool verify_ec_signature(sized_buffer *data, sized_buffer *pubkey_x,
         goto EXIT;
     }
     if (sigalg == TPM_ALG_SM2) {
-        result = EVP_PKEY_CTX_set1_id(pctx, SM2_ID, SM2_ID_LEN);
-        if (result <= 0) {
+        if ( EVP_PKEY_CTX_set1_id(pctx, SM2_ID, SM2_ID_LEN) <= 0 ) {
             ERROR("Error: failed to set sm2 id.\n");
             goto OPENSSL_ERROR;
         }
@@ -802,26 +971,24 @@ bool verify_ec_signature(sized_buffer *data, sized_buffer *pubkey_x,
         result = 0;
         goto EXIT;
     }
-    result = EVP_DigestVerifyInit(mctx, NULL, mdtype, NULL, evp_key);
-    if (result <= 0) {
-        ERROR("Error: error while verifying.\n");
+    if ( EVP_DigestVerifyInit(mctx, NULL, mdtype, NULL, evp_key) <= 0 ) {
+        ERROR("Error: error while verifying (init).\n");
         goto OPENSSL_ERROR;
     }
-    if (verbose) {
+    if ( verbose ) {
         LOG("Data that was signed:\n");
         print_hex("    ", data->data, data->size);
     }
-    result = EVP_DigestVerifyUpdate(mctx, data->data, data->size);
-    if (result <= 0) {
-        ERROR("Error: error while verifying.\n");
+    if ( EVP_DigestVerifyUpdate(mctx, data->data, data->size) <= 0) {
+        ERROR("Error: error while verifying (update).\n");
         goto OPENSSL_ERROR;
     }
     result = EVP_DigestVerifyFinal(mctx, der_encoded_sig, encoded_len);
     if (result < 0) {
-        ERROR("Error: error while verifying.\n");
+        ERROR("Error: error while verifying (final)\tError code = %d.\n", result);
         goto OPENSSL_ERROR;
     }
-    goto EXIT; 
+    goto EXIT;
     OPENSSL_ERROR:
         ERR_load_crypto_strings();
         ERROR("OpenSSL error: %s\n",ERR_error_string(ERR_get_error(), NULL));
@@ -829,8 +996,23 @@ bool verify_ec_signature(sized_buffer *data, sized_buffer *pubkey_x,
         result = 0;
     EXIT:
     //cleanup:
-        if (ec_key != NULL) {
-            OPENSSL_free((void *) ec_key);
+        #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+            if (ec_point != NULL) {
+                OPENSSL_free((void *) ec_point);
+            }
+            if (point_buffer != NULL) {
+                OPENSSL_free((void *) point_buffer);
+            }
+            if (curveName != NULL) {
+                OPENSSL_free((void *) curveName);
+            }
+        #else
+            if (ec_key != NULL) {
+                OPENSSL_free((void *) ec_key);
+            }
+        #endif
+        if (ec_group != NULL) {
+            OPENSSL_free((void *) ec_group);
         }
         if (evp_key != NULL) {
             OPENSSL_free((void *) evp_key);
@@ -841,11 +1023,8 @@ bool verify_ec_signature(sized_buffer *data, sized_buffer *pubkey_x,
         if (y != NULL) {
             OPENSSL_free((void *) y);
         }
-        if (ec_group != NULL) {
-            OPENSSL_free((void *) ec_group);
-        }
         if (der_encoded_sig != NULL) {
-            OPENSSL_free((void *)der_encoded_sig);
+            OPENSSL_free((void *) der_encoded_sig);
         }
         if (mctx != NULL) {
             OPENSSL_free(mctx);
@@ -871,7 +1050,6 @@ bool ec_sign_data(sized_buffer *data, sized_buffer *r, sized_buffer *s, uint16_t
     */
     int result;
     size_t sig_length;
-    EC_KEY *ec_key = NULL;
     EVP_PKEY *evp_key = NULL;
     EVP_MD_CTX *mctx = NULL;
     EVP_PKEY_CTX *pctx = NULL;
@@ -880,6 +1058,9 @@ bool ec_sign_data(sized_buffer *data, sized_buffer *r, sized_buffer *s, uint16_t
     const BIGNUM *sig_r = NULL; //Is freed when ECDSA_SIG is freed
     const BIGNUM *sig_s = NULL; //Is freed when ECDSA_SIG is freed
     const unsigned char *signature_block = NULL;
+    #if OPENSSL_VERSION_NUMBER < 0x30000000L
+        EC_KEY *ec_key = NULL;
+    #endif
 
     LOG("[ec_sign_data]\n");
     if (data == NULL || r == NULL || s == NULL) {
@@ -891,37 +1072,49 @@ bool ec_sign_data(sized_buffer *data, sized_buffer *r, sized_buffer *s, uint16_t
         ERROR("Error: failed to allocate message digest context.\n");
         goto OPENSSL_ERROR;
     }
-    fp = fopen(privkey_file, "r");
+    fp = fopen(privkey_file, "rb");
     if ( fp == NULL ) {
         ERROR("Error: failed to open file %s: %s\n", privkey_file, strerror(errno));
         result = 0;
         goto EXIT;
     }
-    ec_key = PEM_read_ECPrivateKey(fp, NULL, NULL, NULL);
-    if (ec_key == NULL) {
-        ERROR("Error: failed to allocate EC key.\n");
-        goto OPENSSL_ERROR;
-    }
-    fclose(fp);
-    fp = NULL;
-    evp_key = EVP_PKEY_new();
-    if (evp_key == NULL) {
-        ERROR("Error: failed to allocate EVP key.\n");
-        goto OPENSSL_ERROR;
-    }
-    result = EVP_PKEY_assign_EC_KEY(evp_key, ec_key);
-    if (result <= 0) {
-        ERROR("Error: failed to assign EC key to EVP structure.\n");
-        goto OPENSSL_ERROR;
-    }
 
-    if (sigalg == TPM_ALG_SM2) {
-        result = EVP_PKEY_set_alias_type(evp_key, EVP_PKEY_SM2);
-        if (result <= 0) {
-            ERROR("Error: failed to assign SM2 alias to EVP key.\n");
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        OSSL_DECODER_CTX *dctx;
+        dctx = OSSL_DECODER_CTX_new_for_pkey(&evp_key, "PEM", NULL, "EC", OSSL_KEYMGMT_SELECT_PRIVATE_KEY, NULL, NULL);
+        if ( dctx == NULL ) {
             goto OPENSSL_ERROR;
         }
-    }
+        if ( !OSSL_DECODER_from_fp(dctx, fp) ) {
+            goto OPENSSL_ERROR;
+        }
+        OSSL_DECODER_CTX_free(dctx);
+    #else
+        ec_key = PEM_read_ECPrivateKey(fp, NULL, NULL, NULL);
+        if (ec_key == NULL) {
+            ERROR("Error: failed to allocate EC key.\n");
+            goto OPENSSL_ERROR;
+        }
+        evp_key = EVP_PKEY_new();
+        if (evp_key == NULL) {
+            ERROR("Error: failed to allocate EVP key.\n");
+            goto OPENSSL_ERROR;
+        }
+        result = EVP_PKEY_assign_EC_KEY(evp_key, ec_key);
+        if (result <= 0) {
+            ERROR("Error: failed to assign EC key to EVP structure.\n");
+            goto OPENSSL_ERROR;
+        }
+        if (sigalg == TPM_ALG_SM2) {
+            result = EVP_PKEY_set_alias_type(evp_key, EVP_PKEY_SM2);
+            if (result <= 0) {
+                ERROR("Error: failed to assign SM2 alias to EVP key.\n");
+                goto OPENSSL_ERROR;
+            }
+        }
+    #endif
+    fclose(fp);
+    fp = NULL;
     
     pctx = EVP_PKEY_CTX_new(evp_key, NULL);
     if (pctx == NULL) {
@@ -999,9 +1192,11 @@ bool ec_sign_data(sized_buffer *data, sized_buffer *r, sized_buffer *s, uint16_t
         ERR_free_strings();
         result = 0;
     EXIT:
-        if (ec_key != NULL) {
-            OPENSSL_free((void *) ec_key);
-        }
+        #if OPENSSL_VERSION_NUMBER < 0x30000000L
+            if (ec_key != NULL) {
+                OPENSSL_free((void *) ec_key);
+            }
+        #endif
         if (evp_key != NULL) {
             OPENSSL_free((void *) evp_key);
         }
@@ -1185,8 +1380,9 @@ http://mpqs.free.fr/h11300-pkcs-1v2-2-rsa-cryptography-standard-wp_EMC_Corporati
     uint8_t der_oid = 0x06;
     size_t oid_size;
 
-    if (data == NULL)
+    if (data == NULL) {
         return TPM_ALG_NULL;
+    }
 
     data += 2; //Skip 00 01
     //Skip 0xFFs padding and 00 after it
@@ -1195,8 +1391,9 @@ http://mpqs.free.fr/h11300-pkcs-1v2-2-rsa-cryptography-standard-wp_EMC_Corporati
     } while (*data == 0xFF);
     //Then move to der_oid
     data += 5;
-    if (*data != der_oid)
+    if (*data != der_oid) {
         return TPM_ALG_NULL;
+    }
     data += 1;
     //Read oid size:
     oid_size = *data;

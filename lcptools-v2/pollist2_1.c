@@ -48,6 +48,10 @@
 #include <openssl/ecdsa.h>
 #include <openssl/ec.h>
 #include <openssl/evp.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    #include <openssl/decoder.h>
+    #include <openssl/core.h>
+#endif
 #include "../include/hash.h"
 #include "../include/uuid.h"
 #include "../include/lcp3.h"
@@ -1527,9 +1531,13 @@ In: path to file containing RSA public key
 Out: Pointer to signature structure.
 */
 {
-    const BIGNUM *modulus = NULL;
     FILE *fp = NULL;
-    RSA *pubkey = NULL;
+    BIGNUM *modulus = NULL;
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        EVP_PKEY *pubkey = NULL;
+    #else
+        RSA *pubkey = NULL;
+    #endif
     lcp_signature_2_1 *sig = NULL;
     unsigned char *key = NULL;
 
@@ -1537,14 +1545,26 @@ Out: Pointer to signature structure.
     int result = 0;
 
     LOG("read_rsa_pubkey_file_2_1\n");
-    fp = fopen(file, "r");
+    fp = fopen(file, "rb");
     if ( fp == NULL ) {
         ERROR("Error: failed to open .pem file %s: %s\n", file,
                 strerror(errno));
         return NULL;
     }
 
-    pubkey = PEM_read_RSA_PUBKEY(fp, NULL, NULL, NULL);
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        OSSL_DECODER_CTX *dctx;
+        dctx = OSSL_DECODER_CTX_new_for_pkey(&pubkey, "PEM", NULL, "RSA", OSSL_KEYMGMT_SELECT_PUBLIC_KEY, NULL, NULL);
+        if ( dctx == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+        if ( !OSSL_DECODER_from_fp(dctx, fp) ) {
+            goto OPENSSL_ERROR;
+        }
+        OSSL_DECODER_CTX_free(dctx);
+    #else
+        pubkey = PEM_read_RSA_PUBKEY(fp, NULL, NULL, NULL);
+    #endif
     if ( pubkey == NULL ) {
         goto OPENSSL_ERROR;
     }
@@ -1552,7 +1572,11 @@ Out: Pointer to signature structure.
     fclose(fp);
     fp = NULL;
 
-    keysize = RSA_size(pubkey);
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        keysize = EVP_PKEY_get_size(pubkey);
+    #else
+        keysize = RSA_size(pubkey);
+    #endif
     if ( keysize != 256 && keysize != 384 ) {
         ERROR("Error: public key size %d is not supported\n", keysize);
         goto ERROR;
@@ -1564,14 +1588,17 @@ Out: Pointer to signature structure.
         goto ERROR;
     }
 
-    #if OPENSSL_VERSION_NUMBER >= 0x10100000L
-        RSA_get0_key(pubkey, &modulus, NULL, NULL);
-        if (modulus == NULL) {
-            goto OPENSSL_ERROR;
-        }
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        EVP_PKEY_get_bn_param(pubkey, "n", &modulus);
+    #elif OPENSSL_VERSION_NUMBER >= 0x10100000L
+        RSA_get0_key(pubkey, (const BIGNUM **) &modulus, NULL, NULL);
     #else
         modulus = pubkey->n;
     #endif
+    if (modulus == NULL) {
+        goto OPENSSL_ERROR;
+    }
+
     //Allocate for the key
     key = malloc(keysize);
     if (key == NULL) {
@@ -1609,9 +1636,7 @@ Out: Pointer to signature structure.
         free(key);
         return sig;
     OPENSSL_ERROR:
-        ERR_load_CRYPTO_strings();
         ERROR("OpenSSL error: %s\n", ERR_error_string(ERR_get_error(), NULL));
-        ERR_free_strings();
         goto ERROR;
     ERROR:
         if (fp != NULL)
@@ -1744,12 +1769,8 @@ static lcp_signature_2_1 *read_ecdsa_pubkey_file_2_1(const char *pubkey_file)
     int result;
     lcp_signature_2_1 *sig = NULL;
     FILE *fp = NULL;
-    const EC_KEY *pubkey = NULL;
-    const EC_POINT *pubpoint = NULL;
-    const EC_GROUP *pubgroup = NULL;
     BIGNUM *x = NULL;
     BIGNUM *y = NULL;
-    BN_CTX *ctx = NULL;
     uint16_t bytes_in_x;
     uint16_t bytes_in_y;
     uint16_t keySize;
@@ -1758,43 +1779,74 @@ static lcp_signature_2_1 *read_ecdsa_pubkey_file_2_1(const char *pubkey_file)
     uint8_t qy[MAX_ECC_KEY_SIZE];
     uint8_t qx_le[MAX_ECC_KEY_SIZE];
     uint8_t qy_le[MAX_ECC_KEY_SIZE];
+    #if OPENSSL_VERSION_NUMBER < 0x30000000L
+        const EC_KEY *pubkey = NULL;
+        const EC_POINT *pubpoint = NULL;
+        const EC_GROUP *pubgroup = NULL;
+        BN_CTX *ctx = NULL;
+    #else
+        EVP_PKEY *pubkey = NULL;
+    #endif
 
-    LOG("read ecdsa pubkey file for signature 2.1.\n");
-    fp = fopen(pubkey_file, "r");
+    fp = fopen(pubkey_file, "rb");
     if ( fp == NULL) {
         ERROR("ERROR: cannot open file.\n");
         goto ERROR;
     }
-    pubkey = PEM_read_EC_PUBKEY(fp, NULL, NULL, NULL);
-    if ( pubkey == NULL ) {
-        goto OPENSSL_ERROR;
-    }
+
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        OSSL_DECODER_CTX *dctx;
+        dctx = OSSL_DECODER_CTX_new_for_pkey(&pubkey, "PEM", NULL, "EC", OSSL_KEYMGMT_SELECT_PUBLIC_KEY, NULL, NULL);
+        if ( dctx == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+        if ( !OSSL_DECODER_from_fp(dctx, fp) ) {
+            goto OPENSSL_ERROR;
+        }
+        OSSL_DECODER_CTX_free(dctx);
+
+        if ( pubkey == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+
+        EVP_PKEY_get_bn_param(pubkey, "qx", &x);
+        EVP_PKEY_get_bn_param(pubkey, "qy", &y);
+        if ( x == NULL|| y == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+    #else
+        pubkey = PEM_read_EC_PUBKEY(fp, NULL, NULL, NULL);
+        if ( pubkey == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+
+        pubpoint = EC_KEY_get0_public_key(pubkey);
+        if ( pubpoint == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+        pubgroup = EC_KEY_get0_group(pubkey);
+        if ( pubgroup == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+
+        x = BN_new();
+        y = BN_new();
+        if ( x == NULL|| y == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+        ctx = BN_CTX_new();
+        if ( ctx == NULL ) {
+            goto OPENSSL_ERROR;
+        }
+        result = EC_POINT_get_affine_coordinates_GFp(pubgroup, pubpoint, x, y, ctx);
+        if (result <= 0) {
+            goto OPENSSL_ERROR;
+        }
+    #endif    
     //Close the file
     fclose(fp);
     fp = NULL;
 
-    pubpoint = EC_KEY_get0_public_key(pubkey);
-    if ( pubpoint == NULL ) {
-        goto OPENSSL_ERROR;
-    }
-    pubgroup = EC_KEY_get0_group(pubkey);
-    if ( pubgroup == NULL ) {
-        goto OPENSSL_ERROR;
-    }
-
-    x = BN_new();
-    y = BN_new();
-    if ( x == NULL|| y == NULL ) {
-        goto OPENSSL_ERROR;
-    }
-    ctx = BN_CTX_new();
-    if ( ctx == NULL ) {
-        goto OPENSSL_ERROR;
-    }
-    result = EC_POINT_get_affine_coordinates_GFp(pubgroup, pubpoint, x, y, ctx);
-    if (result <= 0) {
-        goto OPENSSL_ERROR;
-    }
     bytes_in_x = BN_num_bytes(x);
     bytes_in_y = BN_num_bytes(y);
 
@@ -1865,11 +1917,13 @@ static lcp_signature_2_1 *read_ecdsa_pubkey_file_2_1(const char *pubkey_file)
     }
 //Free resources:
     OPENSSL_free((void *) pubkey);
-    OPENSSL_free((void *) pubpoint);
-    OPENSSL_free((void *) pubgroup);
-    OPENSSL_free((void *) ctx);
     OPENSSL_free((void *) x);
     OPENSSL_free((void *) y);
+    #if OPENSSL_VERSION_NUMBER < 0x30000000L
+        OPENSSL_free((void *) pubpoint);
+        OPENSSL_free((void *) pubgroup);
+        OPENSSL_free((void *) ctx);
+    #endif
     return sig;
 //ERROR handling:
     OPENSSL_ERROR:
@@ -1884,16 +1938,18 @@ static lcp_signature_2_1 *read_ecdsa_pubkey_file_2_1(const char *pubkey_file)
             free(sig);
         if (pubkey != NULL)
             OPENSSL_free((void *) pubkey);
-        if (pubpoint != NULL)
-            OPENSSL_free((void *) pubpoint);
-        if (pubgroup != NULL)
-            OPENSSL_free((void *) pubgroup);
-        if (ctx != NULL)
-            OPENSSL_free((void *) ctx);
         if (x != NULL)
             OPENSSL_free((void *) x);
         if (y != NULL)
             OPENSSL_free((void *) y);
+        #if OPENSSL_VERSION_NUMBER < 0x30000000L
+            if (pubpoint != NULL)
+                OPENSSL_free((void *) pubpoint);
+            if (pubgroup != NULL)
+                OPENSSL_free((void *) pubgroup);
+            if (ctx != NULL)
+                OPENSSL_free((void *) ctx);
+        #endif
         return NULL;
 }
 
