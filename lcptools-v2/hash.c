@@ -118,6 +118,17 @@ bool hash_buffer(const unsigned char* buf, size_t size, tb_hash_t *hash,
         EVP_MD_CTX_destroy(ctx);
         return true;
     }
+    else if (hash_alg == TB_HALG_SHA512) {
+        EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+        const EVP_MD *md;
+
+        md = EVP_sha512();
+        EVP_DigestInit(ctx, md);
+        EVP_DigestUpdate(ctx, buf, size);
+        EVP_DigestFinal(ctx, hash->sha512, NULL);
+        EVP_MD_CTX_destroy(ctx);
+        return true;
+    }
     else if (hash_alg == TB_HALG_SM3) {
         EVP_MD_CTX *ctx = EVP_MD_CTX_create();
         const EVP_MD *md;
@@ -180,6 +191,30 @@ void print_hash(const tb_hash_t *hash, uint16_t hash_alg)
         for ( unsigned int i = 0; i < SHA256_LENGTH; i++ ) {
             printf("%02x", hash->sha256[i]);
             if ( i < SHA256_LENGTH-1 )
+                printf(" ");
+        }
+        printf("\n");
+    }
+    else if ( hash_alg == TB_HALG_SHA384 ) {
+        for ( unsigned int i = 0; i < SHA384_LENGTH; i++ ) {
+            printf("%02x", hash->sha384[i]);
+            if ( i < SHA384_LENGTH-1 )
+                printf(" ");
+        }
+        printf("\n");
+    }
+    else if ( hash_alg == TB_HALG_SHA512 ) {
+        for ( unsigned int i = 0; i < SHA512_LENGTH; i++ ) {
+            printf("%02x", hash->sha512[i]);
+            if ( i < SHA512_LENGTH-1 )
+                printf(" ");
+        }
+        printf("\n");
+    }
+    else if ( hash_alg == TB_HALG_SM3) {
+        for ( unsigned int i = 0; i < SM3_LENGTH; i++ ) {
+            printf("%02x", hash->sm3[i]);
+            if ( i < SM3_LENGTH-1 )
                 printf(" ");
         }
         printf("\n");
