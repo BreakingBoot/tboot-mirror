@@ -50,7 +50,8 @@ void memlog_init(void)
 {
    if ( g_log == NULL ) {
        g_log = (tboot_log_t *)TBOOT_SERIAL_LOG_ADDR;
-       g_log->uuid = (uuid_t)TBOOT_LOG_UUID;
+       uuid_t uuid = (uuid_t)TBOOT_LOG_UUID;
+       tb_memcpy((void *) &g_log->uuid, (const void *) &uuid, sizeof(uuid_t));
        g_log->curr_pos = 0;
        g_log->zip_count = 0;
        for ( uint8_t i = 0; i < ZIP_COUNT_MAX; i++ ) g_log->zip_pos[i] = 0;
@@ -63,9 +64,10 @@ void memlog_init(void)
     g_log->max_size = TBOOT_SERIAL_LOG_SIZE - sizeof(*g_log);
 
     /* if we're calling this post-launch, verify that curr_pos is valid */
-    if ( g_log->zip_pos[g_log->zip_count] > g_log->max_size ){
+    if ( g_log->zip_pos[g_log->zip_count] > g_log->max_size && g_log != NULL ){
         g_log->curr_pos = 0;
-        g_log->zip_count = 0;
+        uint8_t zero = 0;
+        tb_memcpy((void *) &g_log->uuid, (const void *) &zero, sizeof(uint8_t));
         for ( uint8_t i = 0; i < ZIP_COUNT_MAX; i++ ) g_log->zip_pos[i] = 0;
         for ( uint8_t i = 0; i < ZIP_COUNT_MAX; i++ ) g_log->zip_size[i] = 0;
     }
