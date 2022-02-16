@@ -471,8 +471,8 @@ bool jump_linux_image(void *entry_point)
     static const uint64_t gdt_table[] __attribute__ ((aligned(16))) = {
         0,
         0,
-        0x00c09b000000ffff,     /* cs */
-        0x00c093000000ffff      /* ds */
+        0x00cf9b000000ffff,     /* cs */
+        0x00cf93000000ffff      /* ds */
     };
     /* both 4G flat, CS: execute/read, DS: read/write */
 
