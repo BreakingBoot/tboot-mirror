@@ -67,6 +67,12 @@ typedef struct pcr_data {
     uint8_t digest[SHA1_DIGEST_SIZE];
 } pcr_data;
 
+typedef struct __packed {
+    tpm_pcr_selection   pcr_selection;
+    uint32_t            size_of_pcrs;   // big endian
+    unsigned char       pcrs[][SHA1_DIGEST_SIZE];
+} pcr_composite_buffer;
+
 //Global vars:
 char pcr_info_files[MAX_FILES][MAX_PATH];
 uint8_t num_files = 0;
@@ -207,7 +213,7 @@ static bool cmdline_handler(int c, const char *opt)
     }
 }
 
-static bool generate_composite_hash(pcr_data *pcrs, tb_hash_t *dest, uint8_t no_of_pcrs)
+static bool generate_composite_hash(tpm_pcr_selection *pcr_selection, pcr_data *pcrs, tb_hash_t *dest, uint8_t no_of_pcrs)
 {
     /*
     This function: concatenates pcr values to one blob and hashes it using sha1
@@ -218,8 +224,9 @@ static bool generate_composite_hash(pcr_data *pcrs, tb_hash_t *dest, uint8_t no_
     */
     int count = 0;
     bool result;
-    size_t buff_size;
-    unsigned char *buff;
+    pcr_composite_buffer *buff;
+    size_t buff_size = 0;
+
     if (pcrs == NULL || dest == NULL) {
         ERROR("Error: pcrs or buffer for digest are not defined.\n");
         return false;
@@ -228,12 +235,18 @@ static bool generate_composite_hash(pcr_data *pcrs, tb_hash_t *dest, uint8_t no_
         ERROR("Error: at least 1 and at most 8 pcrs must be selected.\n");
         return false;
     }
-    buff_size = no_of_pcrs * SHA1_DIGEST_SIZE;
+    buff_size = no_of_pcrs * SHA1_DIGEST_SIZE + sizeof(buff) - sizeof(buff->pcrs[0][0]);
     buff = calloc(1, buff_size);
     if (buff == NULL) {
         ERROR("Error: failed to allocate buffer for composite digest.\n");
         return false;
     }
+    memcpy_s(
+        &buff->pcr_selection,
+        sizeof buff->pcr_selection,
+        pcr_selection,
+        sizeof buff->pcr_selection
+    );
     for (int i = 0; i < MAX_PCRS; i++) {
         if (pcrs[i].valid) {
             if (verbose) {
@@ -241,8 +254,8 @@ static bool generate_composite_hash(pcr_data *pcrs, tb_hash_t *dest, uint8_t no_
                 print_hex("", (const void *) pcrs[i].digest, SHA1_DIGEST_SIZE);
             }
             memcpy_s(
-                buff + (count * SHA1_DIGEST_SIZE), //Dest
-                buff_size - (count * SHA1_DIGEST_SIZE), //Dest size
+                buff->pcrs[count], //Dest
+                SHA1_DIGEST_SIZE, //Dest size
                 (const void *) pcrs[i].digest, //Src
                 SHA1_DIGEST_SIZE //Src size
             );
@@ -251,7 +264,7 @@ static bool generate_composite_hash(pcr_data *pcrs, tb_hash_t *dest, uint8_t no_
         if (count == no_of_pcrs)
             break;
     }
-    result = hash_buffer(buff, buff_size, dest, LCP_POLHALG_SHA1);
+    result = hash_buffer((unsigned char *)buff, buff_size, dest, LCP_POLHALG_SHA1);
     if (verbose) {
         DISPLAY("Composite hash value: ");
         print_hex("", (const void *) dest, SHA1_DIGEST_SIZE);
@@ -316,16 +329,16 @@ static lcp_policy_element_t *create(void)
             ERROR("Error: failed to allocate memory for digest buffer.\n");
             return NULL;
         }
-        result = generate_composite_hash(pcrs, digest, no_of_pcrs);
+        pcr_info->locality_at_release = pcrs[0].locality;
+        pcr_info->pcr_selection.size_of_select = htons(1);
+        pcr_info->pcr_selection.pcr_select = pcr_select;
+        result = generate_composite_hash(&pcr_info->pcr_selection, pcrs, digest, no_of_pcrs);
         if (!result) {
             ERROR("Error: failed to generate composite hash.\n");
             free(digest);
             free(elt);
             return false;
         }
-        pcr_info->locality_at_release = pcrs[0].locality;
-         pcr_info->pcr_selection.size_of_select = htons(1);
-        pcr_info->pcr_selection.pcr_select = pcr_select;
         memcpy_s((void *)&pcr_info->digest_at_release, SHA1_DIGEST_SIZE,
                                 (const void *)&digest->sha1, SHA1_DIGEST_SIZE);
         pcr_info++; //Move to next one
