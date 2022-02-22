@@ -68,7 +68,6 @@ typedef struct pcr_data {
 } pcr_data;
 
 //Global vars:
-uint8_t locality = DEFAULT_LOCALITY_SELECT;
 char pcr_info_files[MAX_FILES][MAX_PATH];
 uint8_t num_files = 0;
 int prevOpt = 'i';
@@ -169,6 +168,7 @@ static bool read_pcrinfo_file(const char *file)
         if (this_pcr.locality != 0xFF && this_pcr.num != 0xFF) {
             this_pcr.valid = true;
             pcrs[this_pcr.num] = this_pcr;
+	    pcrs[0].locality = locality;
         }
         else {
             ERROR("Error: failed to read PCR data. Check input file.\n");
@@ -323,7 +323,7 @@ static lcp_policy_element_t *create(void)
             free(elt);
             return false;
         }
-        pcr_info->locality_at_release = locality;
+        pcr_info->locality_at_release = pcrs[0].locality;
          pcr_info->pcr_selection.size_of_select = htons(1);
         pcr_info->pcr_selection.pcr_select = pcr_select;
         memcpy_s((void *)&pcr_info->digest_at_release, SHA1_DIGEST_SIZE,
