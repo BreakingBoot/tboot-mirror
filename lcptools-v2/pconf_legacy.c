@@ -324,7 +324,7 @@ static lcp_policy_element_t *create(void)
             return false;
         }
         pcr_info->locality_at_release = locality;
-        pcr_info->pcr_selection.size_of_select = 1;
+         pcr_info->pcr_selection.size_of_select = htons(1);
         pcr_info->pcr_selection.pcr_select = pcr_select;
         memcpy_s((void *)&pcr_info->digest_at_release, SHA1_DIGEST_SIZE,
                                 (const void *)&digest->sha1, SHA1_DIGEST_SIZE);
@@ -359,7 +359,7 @@ static void display(const char *prefix, const lcp_policy_element_t *elt)
     for (int i = 0; i < pconf->num_pcr_infos; i++) {
         DISPLAY("%sPCRInfos[%d]\n", prefix, i);
         DISPLAY("%s%sTPM_PCR_SELECTION.sizeOfSelect: 0x%x\n", prefix,
-                                prefix, pcr_info->pcr_selection.size_of_select);
+                                prefix, ntohs(pcr_info->pcr_selection.size_of_select));
         DISPLAY("%s%sTPM_PCR_SELECTION.pcrSelect: 0x%x\n", prefix, prefix,
                                             pcr_info->pcr_selection.pcr_select);
         DISPLAY("%s%s:PCR-0:PCR-1:PCR-2:PCR-3:PCR-4:PCR-5:PCR-6:PCR-7:\n",
