@@ -1,10 +1,20 @@
+20220224: v1.10.4
+		Fix hash printing for SHA384, SHA512 and SM3
+		Touch ups for GCC12
+		Set GDT to map CS and DS to 4GB before jumping to Linux
+		make efi_memmap_reserve handle gaps like e820_protect_region
+		Ensure that growth of Multiboot tags does not go beyond original area
+		Replace EFI memory map in Multiboot2 info
+		Fix endianness of pcr_info->pcr_selection.size_of_select
+		Don't ignore locality in PCR file
+		Fix composite hashing algorithm for PCONF elements to match lcptools-1
 20211210: v1.10.3
-	Add UNI-VGA license information
-	Remove poly1305 object files on clean
-	Support higher resolution monitors
-	Use SHA256 as default hashing algorithm in lcp2_mlehash and tb_polgen
-	Add OpenSSL 3.0.0 support in lcptools-v2
-	Increase number of supported CPUs to 1024 to accomodate for larger units
+		Add UNI-VGA license information
+		Remove poly1305 object files on clean
+		Support higher resolution monitors
+		Use SHA256 as default hashing algorithm in lcp2_mlehash and tb_polgen
+		Add OpenSSL 3.0.0 support in lcptools-v2
+		Increase number of supported CPUs to 1024 to accomodate for larger units
 20210614: v1.10.2
         Fix ACM chipset/processor list validation
         Check for client/server match when selecting SINIT
