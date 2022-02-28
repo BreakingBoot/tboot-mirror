@@ -269,7 +269,7 @@ static void print_dump(uint32_t s, uint32_t e)
  * read file from disk, if compressed, uncompress it
  *
  */
-static bool read_mle_file(const char *filename, void *buffer, size_t *length)
+static bool read_mle_file(const char *filename, void **buffer, size_t *length)
 {
     LOG("[read_mle_file]\n");
     gzFile fcompressed = NULL;
@@ -279,7 +279,7 @@ static bool read_mle_file(const char *filename, void *buffer, size_t *length)
     unsigned long i;
 
     *length = 0;
-    buffer = NULL;
+    *buffer = NULL;
 
     /* check the file exists or not */
     LOG("checking whether the file exists or not ... ");
@@ -326,11 +326,11 @@ static bool read_mle_file(const char *filename, void *buffer, size_t *length)
 
     /* read file into buffer */
     LOG("reading the decompressed file ... ");
-    buffer = malloc(*length);
-    if ( buffer == NULL )
+    *buffer = malloc(*length);
+    if ( *buffer == NULL )
         goto error;
-    memset_s(buffer, *length, 0);
-    if ( fread(buffer, 1, *length, fdecompressed) != *length )
+    memset_s(*buffer, *length, 0);
+    if ( fread(*buffer, 1, *length, fdecompressed) != *length )
         goto error;
     fclose(fdecompressed);
     LOG(": succeeded!\n");
@@ -342,8 +342,7 @@ error:
         gzclose(fcompressed);
     if ( fdecompressed )
         fclose(fdecompressed);
-    if ( buffer )
-        free(buffer);
+    free(*buffer);
     return false;
 }
 
