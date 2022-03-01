@@ -314,15 +314,11 @@ static bool read_mle_file(const char *filename, void **buffer, size_t *length)
     fcompressed = NULL;
 
     LOG("testing decompression is ... ");
-    if ( *length > 0 ) {
-        LOG(": succeeded!\n");
-        /* uncompression succeeded */
-        fseek(fdecompressed, 0, SEEK_SET);
-    }
-    else {
-        LOG(": failed!\n");
+    if ( *length <= 0 ) 
         goto error;
-    }
+    LOG(": succeeded!\n");
+    /* uncompression succeeded */
+    fseek(fdecompressed, 0, SEEK_SET);
 
     /* read file into buffer */
     LOG("reading the decompressed file ... ");
@@ -331,18 +327,21 @@ static bool read_mle_file(const char *filename, void **buffer, size_t *length)
         goto error;
     memset_s(*buffer, *length, 0);
     if ( fread(*buffer, 1, *length, fdecompressed) != *length )
-        goto error;
+        goto error2;
     fclose(fdecompressed);
     LOG(": succeeded!\n");
     return true;
 
 error:
+    if ( *buffer )
+        free( *buffer );
+
+error2:
     LOG(": failed!\n");
     if ( fcompressed )
         gzclose(fcompressed);
     if ( fdecompressed )
         fclose(fdecompressed);
-    free(*buffer);
     return false;
 }
 
