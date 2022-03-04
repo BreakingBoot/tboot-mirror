@@ -1,3 +1,6 @@
+20220304: v1.10.5
+		Fixed mlehash.c to bring back functionality and make it GCC12 compliant
+		Reverted change for replacing EFI memory to bring back Tboot in-memory logs
 20220224: v1.10.4
 		Fix hash printing for SHA384, SHA512 and SM3
 		Touch ups for GCC12
