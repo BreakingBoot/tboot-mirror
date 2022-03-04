@@ -331,18 +331,6 @@ static bool remove_mb2_tag(loader_ctx *lctx, struct mb2_tag *cur)
     return true;
 }
 
-
-static bool remove_mb2_tag_by_type(loader_ctx *lctx, uint32_t tag_type)
-{
-    struct mb2_tag *start = next_mb2_tag(NULL);
-    struct mb2_tag *victim = find_mb2_tag_type(start, tag_type);
-
-    if (victim != NULL) {
-        return remove_mb2_tag(lctx,victim);
-    }
-    return false;
-}
-
 static bool
 grow_mb2_tag(loader_ctx *lctx, struct mb2_tag *which, uint32_t how_much)
 {
@@ -1414,22 +1402,11 @@ bool launch_kernel(bool is_measured_launch)
     }
 
     /* replace map in loader context with copy */
-    if ( is_loader_launch_efi(g_ldr_ctx) && efi_memmap_present() ) {
-        /* for EFI, reclaim MB2 space by deleting the E820 map,
-           this ensures grow_mb2_tag() has enough slack available.
-           Due to the growth of each, there can only be one...
-         */
-        remove_mb2_tag_by_type(g_ldr_ctx, MB2_TAG_TYPE_MMAP);
-        replace_efi_map(g_ldr_ctx);
-    } else {
-        remove_mb2_tag_by_type(g_ldr_ctx, MB2_TAG_TYPE_EFI_MMAP);
-        replace_e820_map(g_ldr_ctx);
-    }
+    replace_e820_map(g_ldr_ctx);
 
     if (get_tboot_dump_memmap()) {
         printk(TBOOT_DETA"adjusted e820 map:\n");
         print_e820_map();
-        efi_memmap_dump();
     }
 
     if ( !verify_loader_context(g_ldr_ctx) )
@@ -1929,47 +1906,6 @@ replace_e820_map(loader_ctx *lctx)
         return;
     }
     return;
-}
-
-void
-replace_efi_map(loader_ctx *lctx)
-{
-    /* currently must be MBI type 2 */
-    if ( LOADER_CTX_BAD(lctx) || lctx->type == MB1_ONLY ){
-        return;
-    }
-
-    struct mb2_tag *start = (struct mb2_tag *)(lctx->addr + 8);
-    struct mb2_tag_efi_mmap *tag;
-    tag = (struct mb2_tag_efi_mmap *)find_mb2_tag_type(start, MB2_TAG_TYPE_EFI_MMAP);
-
-    if ( !tag ) {
-        printk(TBOOT_INFO"MB2 EFI map not found\n");
-        return;
-    }
-
-    const uint32_t old_mmap_size = tag->size - sizeof(struct mb2_tag_efi_mmap);
-    uint32_t new_descr_size=0;
-    uint32_t new_descr_vers=0;
-    uint32_t new_mmap_size=0;
-    void    *new_mmap;
-
-    new_mmap = (void *)efi_memmap_get_addr(&new_descr_size, &new_descr_vers, &new_mmap_size);
-
-    if ( old_mmap_size < new_mmap_size ) {
-        /* we have to grow */
-        if (false ==
-            grow_mb2_tag(lctx, (struct mb2_tag *)tag, (new_mmap_size-old_mmap_size))) {
-            printk(TBOOT_ERR"MB2 failed to grow EFI map tag\n");
-            return;
-        }
-    } else {
-        tag->size = sizeof(struct mb2_tag_efi_mmap) + new_mmap_size;
-    }
-    /* copy in new data */
-    tag->descr_size = new_descr_size;
-    tag->descr_vers = new_descr_vers;
-    tb_memcpy(tag->efi_mmap, new_mmap, new_mmap_size);
 }
 
 void print_loader_ctx(loader_ctx *lctx)

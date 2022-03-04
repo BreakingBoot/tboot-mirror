@@ -98,5 +98,4 @@ bool efi_memmap_get_highest_sized_ram(uint64_t size, uint64_t limit,
                                       uint64_t *ram_base, uint64_t *ram_size);
 void efi_memmap_dump(void);
 
-bool efi_memmap_present(void);
 #endif
