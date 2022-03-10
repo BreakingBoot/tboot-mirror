@@ -1792,7 +1792,7 @@ find_platform_racm(loader_ctx *lctx, void **base, uint32_t *size)
         void *base2 = (void *)m->mod_start;
         uint32_t size2 = m->mod_end - (unsigned long)(base2);
         if ( is_racm_acmod(base2, size2, false) &&
-             does_acmod_match_platform((acm_hdr_t *)base2) ) {
+             does_acmod_match_platform((acm_hdr_t *)base2, NULL) ) {
             if ( base != NULL )
                 *base = base2;
             if ( size != NULL )
@@ -1837,7 +1837,7 @@ find_platform_sinit_module(loader_ctx *lctx, void **base, uint32_t *size)
         void *base2 = (void *)m->mod_start;
         uint32_t size2 = m->mod_end - (unsigned long)(base2);
         if ( is_sinit_acmod(base2, size2, false) &&
-             does_acmod_match_platform((acm_hdr_t *)base2) ) {
+             does_acmod_match_platform((acm_hdr_t *)base2, NULL) ) {
             if ( base != NULL )
                 *base = base2;
             if ( size != NULL )

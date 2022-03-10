@@ -576,7 +576,7 @@ bool is_sinit_acmod(const void *acmod_base, uint32_t acmod_size, bool quiet)
     return true;
 }
 
-bool does_acmod_match_platform(const acm_hdr_t* hdr)
+bool does_acmod_match_platform(const acm_hdr_t* hdr, const txt_heap_t *txt_heap)
 {
     /* used to ensure we don't print chipset/proc info for each module */
     static bool printed_host_info;
@@ -587,7 +587,8 @@ bool does_acmod_match_platform(const acm_hdr_t* hdr)
         return false;
 
     /* verify client/server platform match */
-    txt_heap_t *txt_heap = get_txt_heap();
+    if (txt_heap == NULL)
+        txt_heap = get_txt_heap();
     bios_data_t *bios_data = get_bios_data_start(txt_heap);
     if (info_table->version >= 5 && bios_data->version >= 6) {
         uint32_t bios_type = bios_data->flags.bits.mle.platform_type;
@@ -713,7 +714,7 @@ acm_hdr_t *get_bios_sinit(const void *sinit_region_base)
 
     /* is it a valid SINIT module? */
     if ( !is_sinit_acmod(sinit_region_base, bios_data->bios_sinit_size, false) ||
-         !does_acmod_match_platform((acm_hdr_t *)sinit_region_base) )
+         !does_acmod_match_platform((acm_hdr_t *)sinit_region_base, NULL) )
         return NULL;
 
     return (acm_hdr_t *)sinit_region_base;

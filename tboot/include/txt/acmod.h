@@ -37,6 +37,8 @@
 #ifndef __TXT_ACMOD_H__
 #define __TXT_ACMOD_H__
 
+typedef void   txt_heap_t;
+
 /*
  * authenticated code (AC) module header (ver 0.0)
  */
@@ -179,7 +181,7 @@ extern bool is_racm_acmod(const void *acmod_base, uint32_t acmod_size, bool quie
 extern acm_hdr_t *copy_racm(const acm_hdr_t *racm);
 extern bool verify_racm(const acm_hdr_t *acm_hdr);
 extern bool is_sinit_acmod(const void *acmod_base, uint32_t acmod_size, bool quiet);
-extern bool does_acmod_match_platform(const acm_hdr_t* hdr);
+extern bool does_acmod_match_platform(const acm_hdr_t* hdr, const txt_heap_t* txt_heap);
 extern acm_hdr_t *copy_sinit(const acm_hdr_t *sinit);
 extern bool verify_acmod(const acm_hdr_t *acm_hdr);
 extern uint32_t get_supported_os_sinit_data_ver(const acm_hdr_t* hdr);

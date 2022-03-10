@@ -203,15 +203,31 @@ static bool match_platform(acm_hdr_t *hdr)
         close(fd_mem);
         return false;
     }
-    else {
-        if ( does_acmod_match_platform(hdr) )
-            printf("ACM matches platform\n");
-        else
-            printf("ACM does not match platform\n");
 
+    uint64_t txt_heap_size = *(volatile uint64_t *)(pub_config_base + TXTCR_HEAP_SIZE);
+    if (txt_heap_size == 0) {
+        printf("ERROR: No TXT heap is available\n");
         munmap(pub_config_base, TXT_CONFIG_REGS_SIZE);
+        close(fd_mem);
+        return false;
     }
 
+    uint64_t txt_heap_base = *(volatile uint64_t *)(pub_config_base + TXTCR_HEAP_BASE);
+    txt_heap_t *txt_heap = mmap(NULL, txt_heap_size, PROT_READ, MAP_PRIVATE,
+                                fd_mem, txt_heap_base);
+    if ( txt_heap == MAP_FAILED ) {
+        printf("ERROR: cannot map TXT heap by mmap()\n");
+        munmap(pub_config_base, TXT_CONFIG_REGS_SIZE);
+        close(fd_mem);
+        return false;
+    }
+    if ( does_acmod_match_platform(hdr, txt_heap) )
+        printf("ACM matches platform\n");
+    else
+        printf("ACM does not match platform\n");
+
+    munmap(txt_heap, txt_heap_size);
+    munmap(pub_config_base, TXT_CONFIG_REGS_SIZE);
     close(fd_mem);
     return true;
 }
