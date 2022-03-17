@@ -41,6 +41,7 @@ fi
 [ -z "${GRUB_CMDLINE_LINUX_XEN_TBOOT}" ] && unset GRUB_CMDLINE_LINUX_XEN_TBOOT
 [ -z "${GRUB_TBOOT_POLICY_DATA}" ] && unset GRUB_TBOOT_POLICY_DATA
 [ -z "${GRUB_TBOOT_SINIT_LIST}" ] && unset GRUB_TBOOT_SINIT_LIST
+[ -z "${GRUB_TBOOT_SINIT_SELECT_MATCHING}" ] && unset GRUB_TBOOT_SINIT_SELECT_MATCHING
 # Command line for tboot itself
 : ${GRUB_CMDLINE_TBOOT='logging=serial,memory,vga'}
 # Xen parameters to append for tboot
@@ -51,6 +52,8 @@ fi
 : ${GRUB_TBOOT_POLICY_DATA=''}
 # List of SINIT modules to use, glob patterns are supported
 : ${GRUB_TBOOT_SINIT_LIST='/boot/*sinit* /boot/*SINIT*'}
+# Use only SINIT modules that match the current platform
+: ${GRUB_TBOOT_SINIT_SELECT_MATCHING='false'}
 
 export TEXTDOMAIN=grub
 export TEXTDOMAINDIR=${prefix}/share/locale
@@ -194,8 +197,16 @@ xen_list=`for i in /boot/xen*; do
 tboot_list=`for i in /boot/tboot*.gz; do
         if grub_file_is_not_garbage "$i" ; then echo -n "$i " ; fi
       done`
+if [ "x${GRUB_TBOOT_SINIT_SELECT_MATCHING}" = "xtrue" ] && [ ! -e /dev/cpu/0/msr ]; then
+  modprobe msr
+fi
 sinit_list=`for i in ${GRUB_TBOOT_SINIT_LIST}; do
         basename=$(basename $i)
+        if [ "x${GRUB_TBOOT_SINIT_SELECT_MATCHING}" = "xtrue" ] \
+            && ! txt-acminfo "$i" | grep -qx "ACM matches platform"; then
+          # Skip SINIT that does not match
+          continue
+        fi
         if grub_file_is_not_garbage "$i" ; then echo -n "$basename " ; fi
       done`
 if [ -n "${GRUB_TBOOT_POLICY_DATA}" ]; then
