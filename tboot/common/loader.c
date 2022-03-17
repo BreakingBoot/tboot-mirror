@@ -1807,6 +1807,42 @@ find_platform_racm(loader_ctx *lctx, void **base, uint32_t *size)
 }
 
 /*
+ * Check if two memory regions overlap
+ */
+static bool
+regions_overlap(const void *base1, size_t size1, const void *base2, size_t size2) {
+    /*
+      11111
+        22222
+    */
+    if (base1 <= base2 && base2 < base1 + size1) {
+        return true;
+    }
+    /*
+        11111
+      22222
+    */
+    if (base2 <= base1 && base1 < base2 + size2) {
+        return true;
+    }
+    /*
+        1
+      22222
+    */
+    if (base2 <= base1 && base1 + size1 < base2 + size2) {
+        return true;
+    }
+    /*
+      11111
+        2
+    */
+    if (base1 <= base2 && base2 + size2 < base1 + size1) {
+        return true;
+    }
+    return false;
+}
+
+/*
  * will go through all modules to find an SINIT that matches the platform
  * (size can be NULL)
  */
@@ -1836,6 +1872,11 @@ find_platform_sinit_module(loader_ctx *lctx, void **base, uint32_t *size)
 
         void *base2 = (void *)m->mod_start;
         uint32_t size2 = m->mod_end - (unsigned long)(base2);
+        if (regions_overlap(base2, size2,
+                            (void*)TBOOT_LOWMEM_START, TBOOT_LOWMEM_END - TBOOT_LOWMEM_START)) {
+            printk(TBOOT_DETA "Ignoring module as it overlaps with tboot's internal data structures\n");
+            continue;
+        }
         if ( is_sinit_acmod(base2, size2, false) &&
              does_acmod_match_platform((acm_hdr_t *)base2, NULL) ) {
             if ( base != NULL )

@@ -52,9 +52,10 @@
 
 /* these addrs must be in low memory so that they are mapped by the */
 /* kernel at startup */
+#define TBOOT_LOWMEM_START           0x60000
 
 /* address/size for memory-resident serial log (when enabled) */
-#define TBOOT_SERIAL_LOG_ADDR        0x60000
+#define TBOOT_SERIAL_LOG_ADDR        TBOOT_LOWMEM_START
 #define TBOOT_SERIAL_LOG_SIZE        0x08000
 
 /* address/size for modified e820 table */
@@ -72,6 +73,8 @@
                                       TBOOT_EFI_MEMMAP_COPY_SIZE)
 #define TBOOT_KERNEL_CMDLINE_SIZE    0x0400
 
+#define TBOOT_LOWMEM_END             (TBOOT_KERNEL_CMDLINE_ADDR + \
+                                      TBOOT_KERNEL_CMDLINE_SIZE)
 
 #ifndef NR_CPUS
 #define NR_CPUS     1024
