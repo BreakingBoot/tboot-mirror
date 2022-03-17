@@ -40,6 +40,7 @@ fi
 [ -z "${GRUB_CMDLINE_XEN_TBOOT}" ] && unset GRUB_CMDLINE_XEN_TBOOT
 [ -z "${GRUB_CMDLINE_LINUX_XEN_TBOOT}" ] && unset GRUB_CMDLINE_LINUX_XEN_TBOOT
 [ -z "${GRUB_TBOOT_POLICY_DATA}" ] && unset GRUB_TBOOT_POLICY_DATA
+[ -z "${GRUB_TBOOT_SINIT_LIST}" ] && unset GRUB_TBOOT_SINIT_LIST
 # Command line for tboot itself
 : ${GRUB_CMDLINE_TBOOT='logging=serial,memory,vga'}
 # Xen parameters to append for tboot
@@ -48,6 +49,8 @@ fi
 : ${GRUB_CMDLINE_LINUX_XEN_TBOOT=''}
 # Base name of LCP policy data file for list policy
 : ${GRUB_TBOOT_POLICY_DATA=''}
+# List of SINIT modules to use, glob patterns are supported
+: ${GRUB_TBOOT_SINIT_LIST='/boot/*sinit* /boot/*SINIT*'}
 
 export TEXTDOMAIN=grub
 export TEXTDOMAINDIR=${prefix}/share/locale
@@ -191,7 +194,7 @@ xen_list=`for i in /boot/xen*; do
 tboot_list=`for i in /boot/tboot*.gz; do
         if grub_file_is_not_garbage "$i" ; then echo -n "$i " ; fi
       done`
-sinit_list=`for i in /boot/*sinit* /boot/*SINIT*; do
+sinit_list=`for i in ${GRUB_TBOOT_SINIT_LIST}; do
         basename=$(basename $i)
         if grub_file_is_not_garbage "$i" ; then echo -n "$basename " ; fi
       done`
