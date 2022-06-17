@@ -490,8 +490,8 @@ int main(int argc, char* argv[])
     }
 
     else if ( cmd == 'V' ) /* --version */ {
-        DISPLAY("lcp2_mlehash version: %i.%i\nBuild date: %s", TOOL_VER_MAJOR,
-                                                    TOOL_VER_MINOR, __DATE__);
+        DISPLAY("lcp2_mlehash version: %i.%i", TOOL_VER_MAJOR,
+                                               TOOL_VER_MINOR);
         ret = 0;
         goto out;
     }
