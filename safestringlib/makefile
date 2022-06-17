@@ -26,7 +26,7 @@ CLIB =$(addprefix $(SRCDIR)/,$(_CLIB))
 
 $(ODIR)/%.o: $(SRCDIR)/%.c $(DEPS) $(ODEPS)
 	mkdir -p $(ODIR)
-	$(CC) $(LDFLAGS) -c -o $@ $< $(CFLAGS)
+	$(CC) $(LDFLAGS) -c -o $@ $< $(CFLAGS) $(CPPFLAGS)
 
 libsafestring.a: $(OBJ)
 	ar rcs $@ $^ 
@@ -41,7 +41,7 @@ TCLIB =$(addprefix $(TESTDIR)/,$(_TESTFUNCS))
 
 $(OTDIR)/%.o: $(TESTDIR)/%.c $(TESTDIR)/test_private.h
 	mkdir -p $(OTDIR)
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(CPPFLAGS)
 
 
 safestringtest: libsafestring.a $(TOBJ)

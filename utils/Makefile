@@ -61,4 +61,4 @@ txt-parse_err : txt-parse_err.o
 txt-acminfo : txt-acminfo.o
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ $(LIBS) -o $@
 %.o : %.c $(BUILD_DEPS)
-	$(CC) $(CFLAGS) -DNO_TBOOT_LOGLVL -c $< -o $@
+	$(CC) $(CFLAGS) $(CPPFLAGS) -DNO_TBOOT_LOGLVL -c $< -o $@
