@@ -400,23 +400,28 @@ idt_descr:
 
 	.align	8
 
+/* Below assumes "_start" is exactly at TBOOT_START and is needed to allow arithmetic: */
+#define INT_HANDLER_ADDR   (int_handler - _start + TBOOT_START)
+#define INT_HANDLER_LO16   (INT_HANDLER_ADDR & 0xffff)
+#define INT_HANDLER_HI16   (INT_HANDLER_ADDR >> 16)
+
 idt_table:
 	.rept 18
-		.word	int_handler - _start
+		.word	INT_HANDLER_LO16
 		.word	cs_sel
 		.word	0x8e00   /* present, DPL=0, 32b, interrupt */
-		.word	(int_handler - _start + TBOOT_START) >> 16
+		.word	INT_HANDLER_HI16
 	.endr
 	/* for machine-check exception */
-		.word	int_handler - _start
+		.word	INT_HANDLER_LO16
 		.word	cs_sel
 		.word	0x8f00   /* present, DPL=0, 32b, trap */
-		.word	(int_handler - _start + TBOOT_START) >> 16
+		.word	INT_HANDLER_HI16
 	.rept 237
-		.word	int_handler - _start
+		.word	INT_HANDLER_LO16
 		.word	cs_sel
 		.word	0x8e00   /* present, DPL=0, 32b, interrupt */
-		.word	(int_handler - _start + TBOOT_START) >> 16
+		.word	INT_HANDLER_HI16
 	.endr
 idt_table_end:
 
