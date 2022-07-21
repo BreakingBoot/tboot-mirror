@@ -150,12 +150,26 @@ typedef struct __packed {
 #define ACM_CHIPSET_TYPE_BIOS_REVOC   0x08
 #define ACM_CHIPSET_TYPE_SINIT_REVOC  0x09
 
+/* flexible ACM info table list IDs */
+#define CPUL 0x4350554C
+#define CS1L 0x4353314C
+#define CS2L 0x4353324C
+#define TERM 0x4E554C4C
+#define TPML 0x54504D4C
+#define VERL 0x5645524C
+
+typedef struct __packed {
+    uint32_t id;
+    uint32_t size;
+    uint32_t rev;
+} list_header_t;
+
 typedef struct __packed {
     uint32_t  flags;
     uint16_t  vendor_id;
     uint16_t  device_id;
     uint16_t  revision_id;
-    uint16_t  reserved;
+    uint16_t  register_mask;  //  reserved if ACM info table version < 9
     uint32_t  extended_id;
 } acm_chipset_id_t;
 

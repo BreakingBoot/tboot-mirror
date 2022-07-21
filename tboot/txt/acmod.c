@@ -576,6 +576,90 @@ bool is_sinit_acmod(const void *acmod_base, uint32_t acmod_size, bool quiet)
     return true;
 }
 
+static bool find_matching_chipset_id(acm_chipset_id_list_t *chipset_id_list, txt_didvid_t didvid)
+{
+    unsigned int i;
+
+    for ( i = 0; i < chipset_id_list->count; i++ ) {
+        acm_chipset_id_t *chipset_id = &(chipset_id_list->chipset_ids[i]);
+        
+        printk(TBOOT_DETA"\t     vendor: 0x%x, device: 0x%x, flags: 0x%x, "
+               "revision: 0x%x, extended: 0x%x\n",
+               (uint32_t)chipset_id->vendor_id,
+               (uint32_t)chipset_id->device_id, chipset_id->flags,
+               (uint32_t)chipset_id->revision_id, chipset_id->extended_id);
+
+        if ( (didvid.vendor_id == chipset_id->vendor_id ) &&
+             (didvid.device_id == chipset_id->device_id ) &&
+             ( ( ( (chipset_id->flags & 0x1) == 0) &&
+                 (didvid.revision_id == chipset_id->revision_id) ) ||
+               ( ( (chipset_id->flags & 0x1) == 1) &&
+                 ( (didvid.revision_id & chipset_id->revision_id) != 0 ) ) ) )
+            break;
+    }
+
+    if ( i >= chipset_id_list->count ) {
+        printk(TBOOT_ERR"\t chipset id mismatch\n");
+        return false;
+    }
+
+    return true;
+}
+
+static bool find_matching_chipset_2_id(acm_chipset_id_list_t *chipset_id_list, txt_didvid_t didvid)
+{
+    unsigned int i;
+
+    for (i = 0; i < chipset_id_list->count; i++) {
+        acm_chipset_id_t *chipset_id = &(chipset_id_list->chipset_ids[i]);
+
+        printk(TBOOT_DETA"\t     vendor: 0x%x, device: 0x%x, flags: 0x%x, "
+               "revision: 0x%x, register_mask: 0x%x, extended: 0x%x\n",
+               (uint32_t)chipset_id->vendor_id,
+               (uint32_t)chipset_id->device_id, chipset_id->flags,
+               (uint32_t)chipset_id->revision_id, chipset_id->register_mask,
+               chipset_id->extended_id);
+        
+        if ( (didvid.vendor_id == chipset_id->vendor_id) &&
+             ((didvid.device_id & chipset_id->register_mask) == chipset_id->device_id) )
+            break;
+    }
+
+    if (i >= chipset_id_list->count) {
+        printk(TBOOT_ERR"\t chipset id mismatch\n");
+        return false;
+    }
+
+    return true;
+}
+
+static bool find_matching_processor_id(acm_processor_id_list_t *proc_id_list, uint32_t fms, uint64_t platform_id)
+{
+    unsigned int i;
+
+    for ( i = 0; i < proc_id_list->count; i++ ) {
+            acm_processor_id_t *proc_id = &(proc_id_list->processor_ids[i]);
+            
+            printk(TBOOT_DETA"\t     fms: 0x%x, fms_mask: 0x%x, platform_id: 0x%Lx, "
+                   "platform_mask: 0x%Lx\n",
+                   proc_id->fms, proc_id->fms_mask,
+                   (unsigned long long)proc_id->platform_id,
+                   (unsigned long long)proc_id->platform_mask);
+
+            if ( (proc_id->fms == (fms & proc_id->fms_mask)) &&
+                 (proc_id->platform_id == (platform_id & proc_id->platform_mask))
+               )
+                break;
+    }
+
+    if ( i >= proc_id_list->count ) {
+        printk(TBOOT_ERR"\t processor mismatch\n");
+        return false;
+    }
+
+    return true;
+}
+
 bool does_acmod_match_platform(const acm_hdr_t* hdr, const txt_heap_t *txt_heap)
 {
     /* used to ensure we don't print chipset/proc info for each module */
@@ -637,61 +721,77 @@ bool does_acmod_match_platform(const acm_hdr_t* hdr, const txt_heap_t *txt_heap)
         return false;
     }
 
-    /*
-     * check if chipset vendor/device/revision IDs match
-     */
-    acm_chipset_id_list_t *chipset_id_list = get_acmod_chipset_list(hdr);
-    if ( chipset_id_list == NULL )
-        return false;
-
-    printk(TBOOT_DETA"\t %x ACM chipset id entries:\n", chipset_id_list->count);
-    unsigned int i;
-    for ( i = 0; i < chipset_id_list->count; i++ ) {
-        acm_chipset_id_t *chipset_id = &(chipset_id_list->chipset_ids[i]);
-        printk(TBOOT_DETA"\t     vendor: 0x%x, device: 0x%x, flags: 0x%x, "
-               "revision: 0x%x, extended: 0x%x\n",
-               (uint32_t)chipset_id->vendor_id,
-               (uint32_t)chipset_id->device_id, chipset_id->flags,
-               (uint32_t)chipset_id->revision_id, chipset_id->extended_id);
-
-        if ( (didvid.vendor_id == chipset_id->vendor_id ) &&
-             (didvid.device_id == chipset_id->device_id ) &&
-             ( ( ( (chipset_id->flags & 0x1) == 0) &&
-                 (didvid.revision_id == chipset_id->revision_id) ) ||
-               ( ( (chipset_id->flags & 0x1) == 1) &&
-                 ( (didvid.revision_id & chipset_id->revision_id) != 0 ) ) ) )
-            break;
-    }
-    if ( i >= chipset_id_list->count ) {
-        printk(TBOOT_ERR"\t chipset id mismatch\n");
-        return false;
-    }
-
-    /*
-     * check if processor family/model/stepping and platform IDs match
-     */
-    if ( info_table->version >= 4 ) {
-        acm_processor_id_list_t *proc_id_list = get_acmod_processor_list(hdr);
-        if ( proc_id_list == NULL )
+    if (info_table->version < 9) {
+        /*
+        * check if chipset vendor/device/revision IDs match
+        */
+        acm_chipset_id_list_t *chipset_id_list = get_acmod_chipset_list(hdr);
+        if ( chipset_id_list == NULL )
             return false;
 
-        printk(TBOOT_DETA"\t %x ACM processor id entries:\n", proc_id_list->count);
-        for ( i = 0; i < proc_id_list->count; i++ ) {
-            acm_processor_id_t *proc_id = &(proc_id_list->processor_ids[i]);
-            printk(TBOOT_DETA"\t     fms: 0x%x, fms_mask: 0x%x, platform_id: 0x%Lx, "
-                   "platform_mask: 0x%Lx\n",
-                   proc_id->fms, proc_id->fms_mask,
-                   (unsigned long long)proc_id->platform_id,
-                   (unsigned long long)proc_id->platform_mask);
+        printk(TBOOT_DETA"\t %x ACM chipset id entries:\n", chipset_id_list->count);
 
-            if ( (proc_id->fms == (fms & proc_id->fms_mask)) &&
-                 (proc_id->platform_id == (platform_id & proc_id->platform_mask))
-               )
-                break;
+        if (!find_matching_chipset_id(chipset_id_list, didvid))
+            return false;
+
+        /*
+        * check if processor family/model/stepping and platform IDs match
+        */
+        if ( info_table->version >= 4 ) {
+            acm_processor_id_list_t *proc_id_list = get_acmod_processor_list(hdr);
+            if ( proc_id_list == NULL )
+                return false;
+
+            printk(TBOOT_DETA"\t %x ACM processor id entries:\n", proc_id_list->count);
+            if (!find_matching_processor_id(proc_id_list, fms, platform_id))
+                return false;
         }
-        if ( i >= proc_id_list->count ) {
-            printk(TBOOT_ERR"\t processor mismatch\n");
-            return false;
+    } else {
+        list_header_t *info_list_ptr = (list_header_t *)((void *)info_table + info_table->length);
+
+        while (info_list_ptr->id != TERM) {
+            switch(info_list_ptr->id) {
+            case CS1L:
+            {
+                acm_chipset_id_list_t *chipset_id_list = (acm_chipset_id_list_t *)(info_list_ptr + 1);
+
+                if (chipset_id_list == NULL)
+                    return false;
+                
+                if (!find_matching_chipset_id(chipset_id_list, didvid))
+                    return false;
+
+                break;
+            }
+            case CS2L:
+            {
+                acm_chipset_id_list_t *chipset_id_list = (acm_chipset_id_list_t *)(info_list_ptr + 1);
+
+                if (chipset_id_list == NULL)
+                    return false;
+                
+                if (!find_matching_chipset_2_id(chipset_id_list, didvid))
+                    return false;
+                
+                break;
+            }
+            case CPUL:
+            {
+                acm_processor_id_list_t *proc_id_list = (acm_processor_id_list_t *)(info_list_ptr + 1);
+
+                if (proc_id_list == NULL)
+                    return false;
+                
+                if (!find_matching_processor_id(proc_id_list, fms, platform_id))
+                    return false;
+                
+                break;
+            }
+            default:
+                break;
+            }
+
+            info_list_ptr = (list_header_t *)((void *)info_list_ptr + info_list_ptr->size);
         }
     }
 
