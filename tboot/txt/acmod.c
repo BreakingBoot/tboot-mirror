@@ -368,58 +368,141 @@ static void print_acm_hdr(const acm_hdr_t *hdr, const char *mod_name)
     }
 
     /* chipset list */
-    printk(TBOOT_DETA"\t chipset list:\n");
-    acm_chipset_id_list_t *chipset_id_list = get_acmod_chipset_list(hdr);
-    if ( chipset_id_list == NULL ) {
-        printk(TBOOT_ERR"\t\t <invalid>\n");
-        return;
-    }
-    printk(TBOOT_DETA"\t\t count: %u\n", chipset_id_list->count);
-    for ( unsigned int i = 0; i < chipset_id_list->count; i++ ) {
-        printk(TBOOT_DETA"\t\t entry %u:\n", i);
-        acm_chipset_id_t *chipset_id = &(chipset_id_list->chipset_ids[i]);
-        printk(TBOOT_DETA"\t\t     flags: 0x%x\n", chipset_id->flags);
-        printk(TBOOT_DETA"\t\t     vendor_id: 0x%x\n", (uint32_t)chipset_id->vendor_id);
-        printk(TBOOT_DETA"\t\t     device_id: 0x%x\n", (uint32_t)chipset_id->device_id);
-        printk(TBOOT_DETA"\t\t     revision_id: 0x%x\n",
-               (uint32_t)chipset_id->revision_id);
-        printk(TBOOT_DETA"\t\t     extended_id: 0x%x\n", chipset_id->extended_id);
-    }
-
-    if ( info_table->version >= 4 ) {
-        /* processor list */
-        printk(TBOOT_DETA"\t processor list:\n");
-        acm_processor_id_list_t *proc_id_list = get_acmod_processor_list(hdr);
-        if ( proc_id_list == NULL ) {
+    if (info_table->version < 9) {
+        printk(TBOOT_DETA"\t chipset list:\n");
+        acm_chipset_id_list_t *chipset_id_list = get_acmod_chipset_list(hdr);
+        if ( chipset_id_list == NULL ) {
             printk(TBOOT_ERR"\t\t <invalid>\n");
             return;
         }
-        printk(TBOOT_DETA"\t\t count: %u\n", proc_id_list->count);
-        for ( unsigned int i = 0; i < proc_id_list->count; i++ ) {
+        printk(TBOOT_DETA"\t\t count: %u\n", chipset_id_list->count);
+        for ( unsigned int i = 0; i < chipset_id_list->count; i++ ) {
             printk(TBOOT_DETA"\t\t entry %u:\n", i);
-            acm_processor_id_t *proc_id = &(proc_id_list->processor_ids[i]);
-            printk(TBOOT_DETA"\t\t     fms: 0x%x\n", proc_id->fms);
-            printk(TBOOT_DETA"\t\t     fms_mask: 0x%x\n", proc_id->fms_mask);
-            printk(TBOOT_DETA"\t\t     platform_id: 0x%Lx\n", (unsigned long long)proc_id->platform_id);
-            printk(TBOOT_DETA"\t\t     platform_mask: 0x%Lx\n", (unsigned long long)proc_id->platform_mask);
+            acm_chipset_id_t *chipset_id = &(chipset_id_list->chipset_ids[i]);
+            printk(TBOOT_DETA"\t\t     flags: 0x%x\n", chipset_id->flags);
+            printk(TBOOT_DETA"\t\t     vendor_id: 0x%x\n", (uint32_t)chipset_id->vendor_id);
+            printk(TBOOT_DETA"\t\t     device_id: 0x%x\n", (uint32_t)chipset_id->device_id);
+            printk(TBOOT_DETA"\t\t     revision_id: 0x%x\n",
+                (uint32_t)chipset_id->revision_id);
+            printk(TBOOT_DETA"\t\t     extended_id: 0x%x\n", chipset_id->extended_id);
         }
-    }
 
-    if ( info_table->version >= 5 ){
-        /* tpm infor list */
-        printk(TBOOT_DETA"\t TPM info list:\n");
-        tpm_info_list_t *info_list = get_tpm_info_list(hdr);
-        if ( info_list == NULL ) {
-            printk(TBOOT_ERR"\t\t <invalid>\n");
-            return;
+        if ( info_table->version >= 4 ) {
+            /* processor list */
+            printk(TBOOT_DETA"\t processor list:\n");
+            acm_processor_id_list_t *proc_id_list = get_acmod_processor_list(hdr);
+            if ( proc_id_list == NULL ) {
+                printk(TBOOT_ERR"\t\t <invalid>\n");
+                return;
+            }
+            printk(TBOOT_DETA"\t\t count: %u\n", proc_id_list->count);
+            for ( unsigned int i = 0; i < proc_id_list->count; i++ ) {
+                printk(TBOOT_DETA"\t\t entry %u:\n", i);
+                acm_processor_id_t *proc_id = &(proc_id_list->processor_ids[i]);
+                printk(TBOOT_DETA"\t\t     fms: 0x%x\n", proc_id->fms);
+                printk(TBOOT_DETA"\t\t     fms_mask: 0x%x\n", proc_id->fms_mask);
+                printk(TBOOT_DETA"\t\t     platform_id: 0x%Lx\n", (unsigned long long)proc_id->platform_id);
+                printk(TBOOT_DETA"\t\t     platform_mask: 0x%Lx\n", (unsigned long long)proc_id->platform_mask);
+            }
         }
-        printk(TBOOT_DETA"\t\t TPM capability:\n");
-        printk(TBOOT_DETA"\t\t      ext_policy: 0x%x\n", info_list->capabilities.ext_policy);
-        printk(TBOOT_DETA"\t\t      tpm_family : 0x%x\n", info_list->capabilities.tpm_family);
-        printk(TBOOT_DETA"\t\t      tpm_nv_index_set : 0x%x\n", info_list->capabilities.tpm_nv_index_set);
-        printk(TBOOT_DETA"\t\t alg count: %u\n", info_list->count);
-        for ( unsigned int i = 0; i < info_list->count; i++ ) {
-            printk(TBOOT_DETA"\t\t     alg_id: 0x%x\n", info_list->alg_id[i]);
+
+        if ( info_table->version >= 5 ){
+            /* tpm infor list */
+            printk(TBOOT_DETA"\t TPM info list:\n");
+            tpm_info_list_t *info_list = get_tpm_info_list(hdr);
+            if ( info_list == NULL ) {
+                printk(TBOOT_ERR"\t\t <invalid>\n");
+                return;
+            }
+            printk(TBOOT_DETA"\t\t TPM capability:\n");
+            printk(TBOOT_DETA"\t\t      ext_policy: 0x%x\n", info_list->capabilities.ext_policy);
+            printk(TBOOT_DETA"\t\t      tpm_family : 0x%x\n", info_list->capabilities.tpm_family);
+            printk(TBOOT_DETA"\t\t      tpm_nv_index_set : 0x%x\n", info_list->capabilities.tpm_nv_index_set);
+            printk(TBOOT_DETA"\t\t alg count: %u\n", info_list->count);
+            for ( unsigned int i = 0; i < info_list->count; i++ ) {
+                printk(TBOOT_DETA"\t\t     alg_id: 0x%x\n", info_list->alg_id[i]);
+            }
+        }
+    } else {
+        list_header_t *info_list_ptr = (list_header_t *)((void *)info_table + info_table->length);
+
+        while (info_list_ptr->id != TERM) {
+            switch (info_list_ptr->id) {
+            case CS1L:
+            {
+                acm_chipset_id_list_t *chipset_id_list = (acm_chipset_id_list_t *)(info_list_ptr + 1);
+                
+                printk(TBOOT_DETA"\t chipset list:\n");
+                printk(TBOOT_DETA"\t\t count: %u\n", chipset_id_list->count);
+                for ( unsigned int i = 0; i < chipset_id_list->count; i++ ) {
+                    printk(TBOOT_DETA"\t\t entry %u:\n", i);
+                    acm_chipset_id_t *chipset_id = &(chipset_id_list->chipset_ids[i]);
+                    printk(TBOOT_DETA"\t\t     flags: 0x%x\n", chipset_id->flags);
+                    printk(TBOOT_DETA"\t\t     vendor_id: 0x%x\n", (uint32_t)chipset_id->vendor_id);
+                    printk(TBOOT_DETA"\t\t     device_id: 0x%x\n", (uint32_t)chipset_id->device_id);
+                    printk(TBOOT_DETA"\t\t     revision_id: 0x%x\n", (uint32_t)chipset_id->revision_id);
+                    printk(TBOOT_DETA"\t\t     extended_id: 0x%x\n", chipset_id->extended_id);
+                }
+
+                break;
+            }
+            case CS2L:
+            {
+                acm_chipset_id_list_t *chipset_2_id_list = (acm_chipset_id_list_t *)(info_list_ptr + 1);
+
+                printk(TBOOT_DETA"\t chipset 2 list:\n");
+                printk(TBOOT_DETA"\t\t count: %u\n", chipset_2_id_list->count);
+                for ( unsigned int i = 0; i < chipset_2_id_list->count; i++ ) {
+                    printk(TBOOT_DETA"\t\t entry %u:\n", i);
+                    acm_chipset_id_t *chipset_id = &(chipset_2_id_list->chipset_ids[i]);
+                    printk(TBOOT_DETA"\t\t     flags: 0x%x\n", chipset_id->flags);
+                    printk(TBOOT_DETA"\t\t     vendor_id: 0x%x\n", (uint32_t)chipset_id->vendor_id);
+                    printk(TBOOT_DETA"\t\t     device_id: 0x%x\n", (uint32_t)chipset_id->device_id);
+                    printk(TBOOT_DETA"\t\t     revision_id: 0x%x\n", (uint32_t)chipset_id->revision_id);
+                    printk(TBOOT_DETA"\t\t     register_mask: 0x%x\n", (uint32_t)chipset_id->register_mask);
+                    printk(TBOOT_DETA"\t\t     extended_id: 0x%x\n", chipset_id->extended_id);
+                }
+
+                break;
+            }
+            case CPUL:
+            {
+                acm_processor_id_list_t *proc_id_list = (acm_processor_id_list_t *)(info_list_ptr + 1);
+                
+                printk(TBOOT_DETA"\t processor list:\n");
+                printk(TBOOT_DETA"\t\t count: %u\n", proc_id_list->count);
+                for ( unsigned int i = 0; i < proc_id_list->count; i++ ) {
+                    printk(TBOOT_DETA"\t\t entry %u:\n", i);
+                    acm_processor_id_t *proc_id = &(proc_id_list->processor_ids[i]);
+                    printk(TBOOT_DETA"\t\t     fms: 0x%x\n", proc_id->fms);
+                    printk(TBOOT_DETA"\t\t     fms_mask: 0x%x\n", proc_id->fms_mask);
+                    printk(TBOOT_DETA"\t\t     platform_id: 0x%Lx\n", (unsigned long long)proc_id->platform_id);
+                    printk(TBOOT_DETA"\t\t     platform_mask: 0x%Lx\n", (unsigned long long)proc_id->platform_mask);
+                }
+
+                break;
+            }
+            case TPML:
+            {
+                tpm_info_list_t *tpm_info_list = (tpm_info_list_t *)(info_list_ptr + 1);
+                printk(TBOOT_DETA"\t TPM info list:\n");
+                printk(TBOOT_DETA"\t\t TPM capability:\n");
+                printk(TBOOT_DETA"\t\t      ext_policy: 0x%x\n", tpm_info_list->capabilities.ext_policy);
+                printk(TBOOT_DETA"\t\t      tpm_family : 0x%x\n", tpm_info_list->capabilities.tpm_family);
+                printk(TBOOT_DETA"\t\t      tpm_nv_index_set : 0x%x\n", tpm_info_list->capabilities.tpm_nv_index_set);
+                printk(TBOOT_DETA"\t\t alg count: %u\n", tpm_info_list->count);
+                for ( unsigned int i = 0; i < tpm_info_list->count; i++ ) {
+                    printk(TBOOT_DETA"\t\t     alg_id: 0x%x\n", tpm_info_list->alg_id[i]);
+                }
+
+                break;
+            }
+            default:
+                printk(TBOOT_DETA"Unrecognized entry in ACM info table. Skipping...\n");
+                break;
+            }
+
+            info_list_ptr = (list_header_t *)((void *)info_list_ptr + info_list_ptr->size);
         }
     }
 }
@@ -529,12 +612,6 @@ static bool is_acmod(const void *acmod_base, uint32_t acmod_size, uint8_t *type,
             printk(TBOOT_ERR"\t ACM info_table version unsupported (%u)\n",
                    (uint32_t)info_table->version);
         return false;
-    }
-    /* there is forward compatibility, so this is just a warning */
-    else if ( info_table->version > 7 ) {
-        if ( !quiet )
-            printk(TBOOT_WARN"\t ACM info_table version mismatch (%u)\n",
-                   (uint32_t)info_table->version);
     }
 
     return true;
