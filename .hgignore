@@ -50,3 +50,4 @@
 ^utils/txt-parse_err$
 ^cov-int/.*$
 ^doxygen/.*$
+.vscode/
