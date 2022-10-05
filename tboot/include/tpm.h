@@ -442,7 +442,7 @@ struct tpm_if {
     /*
      * Only for version>=2. PCR extend policy.
      */
-#define TB_EXTPOL_AGILE         0
+#define TB_EXTPOL_AGILE         0  // deprecated
 #define TB_EXTPOL_EMBEDDED      1
 #define TB_EXTPOL_FIXED         2
     u8 extpol;

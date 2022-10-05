@@ -507,7 +507,6 @@ static bool hash_module(hash_list_t *hl,
                         size_t size)
 {
     struct tpm_if *tpm = get_tpm();
-    const struct tpm_if_fp *tpm_fp = get_tpm_fp();
 
     if ( hl == NULL ) {
         printk(TBOOT_ERR"Error: input parameter is wrong.\n");
@@ -541,46 +540,7 @@ static bool hash_module(hash_list_t *hl,
             return false;
 
         break;
-
-    case TB_EXTPOL_AGILE: 
-    {
-        hash_list_t img_hl, final_hl;
-        if ( !tpm_fp->hash(tpm, 2, (const unsigned char *)cmdline,
-                tb_strlen(cmdline), hl) )
-            return false;
-
-        uint8_t buf[2*sizeof(tb_hash_t)];
-
-        if ( !tpm_fp->hash(tpm, 2, base, size, &img_hl) )
-            return false;
-        for (unsigned int i=0; i<hl->count; i++) {
-            for (unsigned int j=0; j<img_hl.count; j++) {
-                if (hl->entries[i].alg == img_hl.entries[j].alg) {
-                    copy_hash((tb_hash_t *)buf, &hl->entries[i].hash,
-                            hl->entries[i].alg);
-                    copy_hash((tb_hash_t *)(buf + get_hash_size(hl->entries[i].alg)),
-                            &img_hl.entries[j].hash, hl->entries[i].alg);
-                    if ( !tpm_fp->hash(tpm, 2, buf,
-                            2*get_hash_size(hl->entries[i].alg), &final_hl) )
-                        return false;
-
-                    for (unsigned int k=0; k<final_hl.count; k++) {
-                        if (hl->entries[i].alg == final_hl.entries[k].alg) {
-                            copy_hash(&hl->entries[i].hash,
-                                      &final_hl.entries[k].hash,
-                                      hl->entries[i].alg);
-                            break;
-                        }
-                    }
-                    
-                    break;
-                }
-            }
-        }
-
-        break;
-    }
-
+    
     case TB_EXTPOL_EMBEDDED: 
     {
         tb_hash_t img_hash;
@@ -772,7 +732,6 @@ static tb_error_t verify_module(module_t *module, tb_policy_entry_t *pol_entry,
 static void verify_g_policy(void)
 {
     struct tpm_if *tpm = get_tpm();
-    const struct tpm_if_fp *tpm_fp = get_tpm_fp();
    
     /* assumes mbi is valid */
     printk(TBOOT_INFO"verifying policy \n");
@@ -800,11 +759,6 @@ static void verify_g_policy(void)
                 &VL_ENTRIES(NUM_VL_ENTRIES).hl.entries[0].hash, tpm->cur_alg) )
             apply_policy(TB_ERR_MODULE_VERIFICATION_FAILED);
 
-        break;
-
-    case TB_EXTPOL_AGILE: 
-        if ( !tpm_fp->hash(tpm, 2, buf, size, &VL_ENTRIES(NUM_VL_ENTRIES).hl) )
-            apply_policy(TB_ERR_MODULE_VERIFICATION_FAILED);
         break;
 
     case TB_EXTPOL_EMBEDDED: 

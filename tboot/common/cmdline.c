@@ -516,9 +516,8 @@ void get_tboot_extpol(void)
 
     if ( tb_strcmp(extpol, "agile") == 0 ) {
         printk(TBOOT_WARN"Warning: \"agile\" selected in extpol, "
-                         "this option is set to be deprecated\n"
-                         "(see tboot-devel mailing list archive)\n");
-        tpm->extpol = TB_EXTPOL_AGILE;
+                         "this option is deprecated\n");
+        tpm->extpol = TB_EXTPOL_FIXED;
         tpm->cur_alg = TB_HALG_SHA256;
     } else if ( tb_strcmp(extpol, "embedded") == 0 ) {
         tpm->extpol = TB_EXTPOL_EMBEDDED;

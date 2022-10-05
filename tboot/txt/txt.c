@@ -253,16 +253,6 @@ static void init_evtlog_desc(heap_event_log_ptr_elt2_t *evt_log)
     os_mle_data_t *os_mle_data = get_os_mle_data_start(get_txt_heap());
     struct tpm_if *tpm = get_tpm();
     switch (tpm->extpol) {
-    case TB_EXTPOL_AGILE:
-        for (i=0; i<evt_log->count; i++) {
-            evt_log->event_log_descr[i].alg = tpm->algs_banks[i];
-            evt_log->event_log_descr[i].phys_addr =
-                    (uint64_t)(unsigned long)(os_mle_data->event_log_buffer + i*4096);
-            evt_log->event_log_descr[i].size = 4096;
-            evt_log->event_log_descr[i].pcr_events_offset = 0;
-            evt_log->event_log_descr[i].next_event_offset = 0;
-        }
-        break;
     case TB_EXTPOL_EMBEDDED:
         for (i=0; i<evt_log->count; i++) {
             evt_log->event_log_descr[i].alg = tpm->algs[i];
@@ -334,13 +324,10 @@ static void init_os_sinit_ext_data(heap_ext_data_element_t* elts)
         printk(TBOOT_DETA"heap_ext_data_element SIZE = %d \n", elt->size);
     }  else if ( log_type == EVTLOG_TPM2_LEGACY ) {
         g_elog_2 = (heap_event_log_ptr_elt2_t *)elt->data;
-        if ( tpm->extpol == TB_EXTPOL_AGILE )
-            g_elog_2->count = tpm->banks;
+        if ( tpm->extpol == TB_EXTPOL_EMBEDDED )
+            g_elog_2->count = tpm->alg_count;
         else
-            if ( tpm->extpol == TB_EXTPOL_EMBEDDED )
-                g_elog_2->count = tpm->alg_count;
-            else
-                g_elog_2->count = 1;
+            g_elog_2->count = 1;
         init_evtlog_desc(g_elog_2);
         elt->type = HEAP_EXTDATA_TYPE_TPM_EVENT_LOG_PTR_2;
         elt->size = sizeof(*elt) + sizeof(u32) +
@@ -711,7 +698,7 @@ static txt_heap_t *init_txt_heap(void *ptab_base, acm_hdr_t *sinit, loader_ctx *
     /* PCR mapping selection MUST be zero in TPM2.0 mode
      * since D/A mapping is the only supported by TPM2.0 */
     if ( tpm->major >= TPM20_VER_MAJOR ) {
-        os_sinit_data->flags = (tpm->extpol == TB_EXTPOL_AGILE) ? 0 : 1;
+        os_sinit_data->flags = 1;
         os_sinit_data->capabilities.pcr_map_no_legacy = 0;
         os_sinit_data->capabilities.pcr_map_da = 0;
         g_using_da = 1;
