@@ -131,7 +131,7 @@ typedef struct __packed {
 #define ZIP_COUNT_MAX 10
 typedef struct {
     uuid_t     uuid;
-    uint16_t   max_size;
+    uint32_t   max_size;
     uint16_t   curr_pos;
     uint16_t   zip_pos[ZIP_COUNT_MAX];
     uint16_t   zip_size[ZIP_COUNT_MAX];

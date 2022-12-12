@@ -56,7 +56,7 @@
 
 /* address/size for memory-resident serial log (when enabled) */
 #define TBOOT_SERIAL_LOG_ADDR        TBOOT_LOWMEM_START
-#define TBOOT_SERIAL_LOG_SIZE        0x08000
+#define TBOOT_SERIAL_LOG_SIZE        0x32000
 
 /* address/size for modified e820 table */
 #define TBOOT_E820_COPY_ADDR         (TBOOT_SERIAL_LOG_ADDR + \
