@@ -1,3 +1,13 @@
+20221223: v1.11.0
+		Fixed TPM handling to flush objects after integrity measurement (Intel PTT limitations)
+		Exteded low memory range for logs (HCC CPUs had issue with not enough memory)
+		"agile" removed from PCR Extend policy options (requested deprecation)
+		Added handling for flexible ACM Info Table format
+		lcptools: CPPFLAGS use by environment in build
+		lcptools: removed __DATE__ refs to make build reproducible
+		Only platform-matchin SINIT modules can be selected
+		txt-acminfo: Map TXT heap using mmap
+		Typo fix in man page
 20220304: v1.10.5
 		Fixed mlehash.c to bring back functionality and make it GCC12 compliant
 		Reverted change for replacing EFI memory to bring back Tboot in-memory logs
