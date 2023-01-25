@@ -1,3 +1,5 @@
+20230125: v1.11.1
+		Revert log memory range extension (caused memory overlaps and boot failures)
 20221223: v1.11.0
 		Fixed TPM handling to flush objects after integrity measurement (Intel PTT limitations)
 		Exteded low memory range for logs (HCC CPUs had issue with not enough memory)
