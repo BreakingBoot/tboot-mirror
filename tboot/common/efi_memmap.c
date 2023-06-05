@@ -301,7 +301,11 @@ void efi_memmap_dump(void)
 bool efi_memmap_get_highest_sized_ram(uint64_t size, uint64_t limit,
                                       uint64_t *ram_base, uint64_t *ram_size)
 {
-    uint64_t last_fit_base = 0, last_fit_size = 0;
+    uint64_t last_fit_base      = 0;
+    uint64_t last_fit_size      = 0;
+    uint64_t free_area_base     = 0;
+    uint64_t free_region_length = 0;
+    uint64_t free_area_length   = 0;
 
     if (ram_base == NULL || ram_size == NULL || !efi_mmap_available) {
         return false;
@@ -310,16 +314,26 @@ bool efi_memmap_get_highest_sized_ram(uint64_t size, uint64_t limit,
     efi_mem_descr_t* desc = NULL;
     while ((desc = efi_memmap_walk(desc)) != NULL) {
         if (region_is_free(desc->type)) {
-            uint64_t base = desc->physical_start;
-            uint64_t length = desc->num_pages * (1 << EFI_PAGE_SHIFT);
+            if (free_area_base == 0) {
+                free_area_base = desc->physical_start;
+            }
+
+            free_region_length = desc->num_pages * (1 << EFI_PAGE_SHIFT);
 
             /* over 4GB so use the last region that fit */
-            if ( base + length > limit )
+            if (free_area_base + free_area_length + free_region_length > limit) {
                 break;
-            if ( size <= length ) {
-                last_fit_base = base;
-                last_fit_size = length;
             }
+
+            free_area_length += free_region_length;
+            if (size <= free_area_length) {
+                last_fit_base = free_area_base;
+                last_fit_size = free_area_length;
+            }
+        }
+        else {
+            free_area_base   = 0;
+            free_area_length = 0;
         }
     }
 
