@@ -1,3 +1,5 @@
+20230616: v1.11.2
+		Fix the RAM memory allocation algorithm for the initrd.
 20230125: v1.11.1
 		Revert log memory range extension (caused memory overlaps and boot failures)
 20221223: v1.11.0
