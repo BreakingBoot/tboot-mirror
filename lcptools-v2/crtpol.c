@@ -214,9 +214,9 @@ lcp_policy_data_t2 *create_poldata(void)
 
     bool no_sigblock_ok = false;
     size_t file_len;
-    uint16_t version;
-    uint16_t use_only_version; //Sets the version of list to use
     size_t list_size;
+    uint16_t version;
+    uint16_t use_only_version = 0; //Sets the version of list to use
 
     poldata = malloc(sizeof(*poldata));
     if ( poldata == NULL ) {
