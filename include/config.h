@@ -77,7 +77,7 @@
                                       TBOOT_KERNEL_CMDLINE_SIZE)
 
 #ifndef NR_CPUS
-#define NR_CPUS     1024
+#define NR_CPUS     8192
 #endif
 
 #ifdef __ASSEMBLY__
