@@ -1,3 +1,11 @@
+20240122: v1.11.3
+		Fix the hanging TBOOT issue, which appeared during the RLPs wakeup process
+		on the Intel's multisocket platform. This problem appeared during the AP
+		stacks allocations for these RLPs. TBOOT allocated memory for them depending
+		on the woken-up CPUs X2 APIC values. When some of them exceeded the NR_CPUS (1024),
+		then the RLP wakeup process execution halted. For the current moment,
+		the maximal X2 APID value was increased from 1024 to 8192. This kind of
+		solution fixed the given problem.
 20230616: v1.11.2
 		Fix the RAM memory allocation algorithm for the initrd.
 20230125: v1.11.1
