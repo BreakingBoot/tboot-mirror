@@ -219,7 +219,7 @@ static void display_heap(txt_heap_t *heap)
 static void display_tboot_log(void *log_base)
 {
     static char buf[512];
-    char pbuf[32*1024];
+    char pbuf[64*1024];
     char *out = pbuf;
     tboot_log_t *log = (tboot_log_t *)log_base;
     char *log_buf = log->buf;

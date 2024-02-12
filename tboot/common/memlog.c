@@ -101,8 +101,8 @@ void memlog_write(const char *str, unsigned int count)
 
 void memlog_compress(uint32_t required_space)
 {
-    /* allocate a 32K temp buffer for compressed log  */
-    static char buf[32*1024];
+    /* allocate a 64K temp buffer for compressed log  */
+    static char buf[64*1024];
     char *out=buf;
     int zip_size;
     uint32_t zip_pos;
