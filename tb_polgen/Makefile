@@ -1,4 +1,4 @@
-# Copyright (c) 2006-2010, Intel Corporation
+# Copyright (c) 2006-2024, Intel Corporation
 # All rights reserved.
 
 # -*- mode: Makefile; -*-

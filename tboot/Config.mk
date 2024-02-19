@@ -1,4 +1,4 @@
-# Copyright (c) 2006-2010, Intel Corporation
+# Copyright (c) 2006-2024, Intel Corporation
 # All rights reserved.
 
 # -*- mode: Makefile; -*-
@@ -6,8 +6,8 @@
 #
 # tboot-specific build settings
 #
-RELEASEVER  := "1.11.3"
-RELEASETIME := "2024-01-22 16:30 +0100"
+RELEASEVER  := "0.00.1"
+RELEASETIME := "2024-03-01 16:30 +0100"
 ROOTDIR ?= $(CURDIR)/..
 
 # tboot needs too many customized compiler settings to use system CFLAGS,
@@ -16,9 +16,8 @@ CFLAGS		:= $(TBOOT_CFLAGS)
 
 include $(ROOTDIR)/Config.mk
 
-# if target arch is 64b, then convert -m64 to -m32 (tboot is always 32b)
-CFLAGS		:= $(shell echo $(CFLAGS) | sed -e s/-m64/-m32/)
-CFLAGS		+= -march=i686
+# tboot target arch is 64b
+CFLAGS		+= -march=x86-64
 CFLAGS		+= -nostdinc
 CFLAGS		+= -fno-builtin -fno-common -fno-strict-aliasing
 CFLAGS		+= -fomit-frame-pointer

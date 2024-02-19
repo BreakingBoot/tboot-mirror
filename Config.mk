@@ -1,4 +1,4 @@
-# Copyright (c) 2006-2010, Intel Corporation
+# Copyright (c) 2006-2024, Intel Corporation
 # All rights reserved.
 
 # -*- mode: Makefile; -*-
@@ -48,7 +48,7 @@ CFLAGS_WARN       = -Wall -Wformat-security -Werror -Wstrict-prototypes \
 AS         ?= as
 LD         ?= ld
 CC         ?= gcc
-CPP        ?= cpp
+CPP        ?= g++
 AR         ?= ar
 RANLIB     ?= ranlib
 NM         ?= nm
@@ -86,8 +86,7 @@ ifeq ($(TARGET_ARCH),x86_64)
 LIBDIR := lib64
 CFLAGS += -m64
 else
-LIBDIR := lib
-CFLAGS += -m32 -march=i686
+$(error "Invalid target architecture: $(TARGET_ARCH), instead of x86-64")
 endif
 
 CFLAGS += -I$(ROOTDIR)/safestringlib/include
