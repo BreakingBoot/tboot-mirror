@@ -46,4 +46,4 @@ AFLAGS		+= $(patsubst -std=gnu%,,$(CFLAGS))
 
 
 # LDFLAGS are only passed directly to $(LD)
-LDFLAGS		= -melf_i386
+LDFLAGS		= -melf_x86_64

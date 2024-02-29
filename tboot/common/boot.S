@@ -173,17 +173,32 @@ ENTRY(_post_launch_entry)
 	je __start                /* yes, so continue with normal launch */
 
 layout_err:       /* layout check failed so TXT RESET */
-	                 /* set a special error code */
-	movl $LAYOUT_ERR, (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_ERRORCODE)
-	                 /* unlock memory config (and serialize) */
-	movl $1, (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_CMD_UNLOCK_MEM_CONFIG)
-	movl (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_STS), %eax
-	                 /* TXT RESET */
-	movl $1, (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_CMD_RESET)
-	mov $6, %eax
-	mov $0xcf9, %edx
-	out %al, (%dx)   /* for debug chipsets where TXT RESET may not work */
-	ud2
+                     /* set a special error code */
+    xor %eax, %eax
+    mov $LAYOUT_ERR, %eax
+    mov %eax, (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_ERRORCODE)
+                     /* unlock memory config (and serialize) */
+    xor %eax, %eax
+
+    mov $1, %eax
+    mov %eax, (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_CMD_UNLOCK_MEM_CONFIG)
+    xor %eax, %eax
+
+    mov (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_STS), %eax
+                     /* TXT RESET */
+    mov %eax, %ebx
+    xor %eax, %eax
+
+    mov $1, %eax
+    mov %al, (TXT_PRIV_CONFIG_REGS_BASE + TXTCR_CMD_RESET)
+    xor %eax, %eax
+    mov %ebx, %eax
+    xor %ebx, %ebx
+
+    mov $6, %eax
+    mov $0xcf9, %edx
+    out %al, (%dx)   /* for debug chipsets where TXT RESET may not work */
+    ud2
 
 
 ENTRY(__start)
@@ -199,7 +214,7 @@ ENTRY(__start)
 1:	leal	bsp_stack,%esp
 
         /* Reset EFLAGS (subsumes CLI and CLD). */
-        pushl   $0
+        push   $0
         popf
 
         /* preserve EAX to be a param to begin_launch--it should
@@ -211,26 +226,26 @@ ENTRY(__start)
         mov     $__bss_start,%edi
         mov     $_end,%ecx
         sub     %edi,%ecx
-        xor     %eax,%eax
+        xor     %rax,%rax
         rep     stosb
 
         /* Load IDT */
         lidt    idt_descr
 
         /* enable MCE */
-        mov     %cr4,%eax
+        mov     %cr4,%rax
         or      $CR4_MCE,%eax
-        mov     %eax,%cr4
+        mov     %rax,%cr4
 
         /* pass multiboot info struct, magic and call measured launch code */
-        push    %edx
-        push    %ebx
+        push    %rdx
+        push    %rbx
         call    begin_launch
         ud2
 
 ENTRY(__enable_nmi)
 	pushf
-	push %cs
+	push %cs /* PUSH CS is not supported for the 64 bit architecture*/
 	push $(1f)
 	iret
 1:	ret

@@ -35,15 +35,15 @@
 
 compat_mode_entry:
         /* Disable PCID */
-        movl %cr4, %eax
-        andl $~CR4_PCIDE, %eax
-        movl %eax, %cr4
+        mov %cr4, %rax
+        and $~CR4_PCIDE, %eax
+        mov %rax, %cr4
 
 
 	/* Disable paging and therefore leave 64 bit mode. */
-        movl %cr0, %eax
-        andl $~CR0_PG, %eax
-        movl %eax, %cr0
+        mov %cr0, %rax
+        and $~CR0_PG, %eax
+        mov %rax, %cr0
 
         /* Clear MSR_EFER[LME], disabling long mode */
         movl    $MSR_EFER,%ecx
@@ -91,21 +91,21 @@ shutdown_entry32:
 	mov	%ecx, %esp
 
 3:	/* Reset EFLAGS (subsumes CLI and CLD). */
-        pushl   $0x0
+        push   $0x0
         popf
 
         /* Load IDT */
         lidt    idt_descr
 
         /* disable paging */
-        mov %cr0, %eax
+        mov %cr0, %rax
         and $~CR0_PG, %eax
-        mov %eax, %cr0
+        mov %rax, %cr0
         jmp 1f
 
 1:      /* clear cr4 except for SMXE */
         mov     $0x4000, %eax
-        mov     %eax, %cr4
+        mov     %rax, %cr4
 
         /* true shutdown work for tboot */
         call shutdown
