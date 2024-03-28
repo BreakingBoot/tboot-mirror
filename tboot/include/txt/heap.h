@@ -233,6 +233,17 @@ typedef struct {
 	uint32_t next_record_offset;
 } heap_event_log_ptr_elt2_1_t;
 
+#define HEAP_EXTDATA_TYPE_TPR_REQ 13
+typedef struct __packed {
+    uint64_t tpr_range_base; //Physical address of the TPR base
+    uint64_t tpr_range_size; //Size of the requested TPR
+} tpr_range_t;
+
+typedef struct __packed {
+    uint32_t tpr_cnt; //How many TPRs in the request area. Max value of tpr_cnt is HW-specific.
+    tpr_range_t tpr_req_arr[]; //array of tpr ranges (tpr_cnt * tpr_range_t)
+} heap_tpr_req_element_t;
+
 /*
  * data-passing structures contained in TXT heap:
  *   - BIOS
@@ -295,6 +306,7 @@ typedef struct __packed {
 #define MIN_OS_SINIT_DATA_VER    4
 #define MAX_OS_SINIT_DATA_VER    7
 #define OS_SINIT_FLAGS_EXTPOL_MASK  0x00000001
+#define OS_SINIT_DATA_WITH_TPR_SIZE 144 //92 bytes for struct, 44 for tpr_req_elt, 8 for end elt
 /*
  * OS/loader to SINIT structure
  */
@@ -447,6 +459,7 @@ extern bool verify_txt_heap(const txt_heap_t *txt_heap, bool bios_data_only);
 extern bool verify_bios_data(const txt_heap_t *txt_heap);
 extern void print_os_sinit_data(const os_sinit_data_t *os_sinit_data);
 extern void print_os_sinit_data_vtdpmr(const os_sinit_data_t *os_sinit_data);
+extern heap_tpr_req_element_t *get_tpr_req_element(const os_sinit_data_t *os_sinit_data);
 
 #endif      /* __TXT_HEAP_H__ */
 

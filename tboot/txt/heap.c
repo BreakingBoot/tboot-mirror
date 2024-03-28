@@ -371,6 +371,20 @@ static void print_evt_log_ptr_elt_2_1(const heap_ext_data_element_t *elt)
     }
 }
 
+static void print_tpr_req_elt(const heap_ext_data_element_t *elt)
+{
+    if (elt == NULL) return;
+    const heap_tpr_req_element_t *tpr_req_elt = (const heap_tpr_req_element_t *) elt->data;
+    printk(TBOOT_DETA"\t TPR_REQ_ELEMENT:\n");
+    printk(TBOOT_DETA"\t\t       type: %d\n", elt->type);
+    printk(TBOOT_DETA"\t\t       size: %u\n", elt->size);
+    printk(TBOOT_DETA"\t\t    tpr_cnt: %u\n", tpr_req_elt->tpr_cnt);
+    for (uint16_t i = 0; i < tpr_req_elt->tpr_cnt; i++) {
+        printk(TBOOT_DETA"\t    tpr_range[%u]:\n", i);
+        printk(TBOOT_DETA"\t\t    range_base: 0x%Lx\n", tpr_req_elt->tpr_req_arr[i].tpr_range_base);
+        printk(TBOOT_DETA"\t\t    range_size: 0x%Lx\n", tpr_req_elt->tpr_req_arr[i].tpr_range_size);
+    }
+}
 
 static void print_ext_data_elts(const heap_ext_data_element_t elts[])
 {
@@ -396,6 +410,9 @@ static void print_ext_data_elts(const heap_ext_data_element_t elts[])
                 break;
             case HEAP_EXTDATA_TYPE_TPM_EVENT_LOG_PTR_2_1:
                 print_evt_log_ptr_elt_2_1(elt);
+                break;
+            case HEAP_EXTDATA_TYPE_TPR_REQ:
+                print_tpr_req_elt(elt);
                 break;
             default:
                 printk(TBOOT_WARN"\t\t unknown element:  type: %u, size: %u\n",
@@ -703,6 +720,7 @@ static bool verify_os_mle_data(const txt_heap_t *txt_heap)
  */
 uint64_t calc_os_sinit_data_size(uint32_t version)
 {
+    uint64_t tpr_elt_size = 0;
     uint64_t size[] = {
         offsetof(os_sinit_data_t, efi_rsdt_ptr) + sizeof(uint64_t),
         sizeof(os_sinit_data_t) + sizeof(uint64_t),
@@ -730,6 +748,14 @@ uint64_t calc_os_sinit_data_size(uint32_t version)
             2 * sizeof(heap_ext_data_element_t) + 4 +
             count*sizeof(heap_event_log_descr_t);
     }
+    //we need TPR for lo RAM and TPR for hi ram (2 TPR ranges)
+    //size of heap_ext_data_element_t.type and size, plus size of tpr_cnt in tpr eleemnt,
+    //plus size of tpr_range structure (twice)
+    if (g_tpr_support) {
+        tpr_elt_size = offsetof(heap_ext_data_element_t, data) + offsetof(heap_tpr_req_element_t, tpr_req_arr) + 
+                   (2 * sizeof(tpr_range_t));
+        size[2] += tpr_elt_size;
+    }
 
     if ( version >= 6 )
         return size[2];
@@ -743,6 +769,18 @@ void print_os_sinit_data_vtdpmr(const os_sinit_data_t *os_sinit_data)
     printk(TBOOT_DETA"\t vtd_pmr_lo_size: 0x%Lx\n", os_sinit_data->vtd_pmr_lo_size);
     printk(TBOOT_DETA"\t vtd_pmr_hi_base: 0x%Lx\n", os_sinit_data->vtd_pmr_hi_base);
     printk(TBOOT_DETA"\t vtd_pmr_hi_size: 0x%Lx\n", os_sinit_data->vtd_pmr_hi_size);
+}
+
+void print_os_sinit_data_tpr(const os_sinit_data_t *os_sinit_data)
+{
+    heap_tpr_req_element_t *tpr_elt = NULL;
+    if (os_sinit_data == NULL) return;
+    tpr_elt = get_tpr_req_element(os_sinit_data);
+    if (tpr_elt == NULL) return;
+    printk(TBOOT_DETA"\t tpr_lo_base: 0x%Lx\n", tpr_elt->tpr_req_arr[0].tpr_range_base);
+    printk(TBOOT_DETA"\t tpr_lo_size: 0x%Lx\n", tpr_elt->tpr_req_arr[0].tpr_range_size);
+    printk(TBOOT_DETA"\t tpr_hi_base: 0x%Lx\n", tpr_elt->tpr_req_arr[1].tpr_range_base);
+    printk(TBOOT_DETA"\t tpr_hi_size: 0x%Lx\n", tpr_elt->tpr_req_arr[1].tpr_range_size);
 }
 
 void print_os_sinit_data(const os_sinit_data_t *os_sinit_data)
@@ -948,6 +986,35 @@ bool verify_txt_heap(const txt_heap_t *txt_heap, bool bios_data_only)
         return false;
 
     return true;
+}
+
+heap_tpr_req_element_t *get_tpr_req_element(const os_sinit_data_t *os_sinit_data) {
+    heap_ext_data_element_t *elt = NULL;
+    heap_tpr_req_element_t *tpr_elt = NULL;
+    if (os_sinit_data == NULL) {
+        return NULL;
+    }
+    if (os_sinit_data->version < 6) {
+        //Old versions do not support heap_ext_elements
+        return NULL;
+    }
+    if (g_tpr_support == false) {
+        //TPR not supported
+        return NULL;
+    }
+    elt = (heap_ext_data_element_t *) &os_sinit_data->ext_data_elts;
+    //Walk elements to find TPR element
+    while (elt->type != HEAP_EXTDATA_TYPE_END) {
+        if (elt->type != HEAP_EXTDATA_TYPE_TPR_REQ) {
+            elt = (void *)elt + elt->size;
+        }
+        else {
+            printk(TBOOT_DETA"Found TPR req element\n");
+            tpr_elt = (heap_tpr_req_element_t *) &elt->data;
+            break;
+        }
+    }
+    return tpr_elt;
 }
 
 #endif

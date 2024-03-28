@@ -239,20 +239,70 @@ tb_error_t supports_txt(void)
     return TB_ERR_TXT_NOT_SUPPORTED;
 }
 
-static bool reserve_vtd_delta_mem(uint64_t min_lo_ram, uint64_t max_lo_ram,
+#define LO_RANGE 0
+#define HI_RANGE 1
+static dma_protected_range_t get_dma_protect_info(uint8_t range /*HI or LO*/, os_sinit_data_t* os_sinit_data_start_override /*Can be NULL*/)
+{
+    /* Reads HI or LO DMA protection base from TPR or VT-d PMR */
+    dma_protected_range_t range_info = {0};
+    txt_heap_t* txt_heap = get_txt_heap();
+    os_sinit_data_t *os_sinit_data = NULL; 
+    heap_tpr_req_element_t *tpr_req_elt = NULL;
+
+    if (range != LO_RANGE && range != HI_RANGE) {
+        return range_info;
+    }
+
+    //Override os_sinit_data start
+    if (os_sinit_data_start_override != NULL) {
+        os_sinit_data = os_sinit_data_start_override;
+    }
+    //Else set it to the beginning of os_sinit_data in heap
+    else {
+        os_sinit_data = get_os_sinit_data_start(txt_heap);
+    }
+
+    if (g_tpr_support) {
+        tpr_req_elt = get_tpr_req_element(os_sinit_data);
+        if (g_tpr_support == true && tpr_req_elt == NULL) {
+            printk(TBOOT_ERR"failed to read TPR_REQ_ELEMENT from TXT HEAP.\n");
+            return  range_info;
+        }
+        if (g_tpr_support == true && tpr_req_elt->tpr_cnt != 2) {
+            printk(TBOOT_ERR"TPR_REQ_ELEMENT count is not 2.\n");
+            return range_info;
+        }
+        range_info.base = tpr_req_elt->tpr_req_arr[range].tpr_range_base;
+        range_info.size = tpr_req_elt->tpr_req_arr[range].tpr_range_size;
+    } else {
+        if (range == HI_RANGE) {
+            range_info.base = os_sinit_data->vtd_pmr_hi_base;
+            range_info.size = os_sinit_data->vtd_pmr_hi_size;
+        }
+        else {
+            range_info.base = os_sinit_data->vtd_pmr_lo_base;
+            range_info.size = os_sinit_data->vtd_pmr_lo_size;
+        }
+    }
+    return range_info;
+}
+
+static bool reserve_dma_protected_delta_mem(uint64_t min_lo_ram, uint64_t max_lo_ram,
                                   uint64_t min_hi_ram, uint64_t max_hi_ram)
 {
     uint64_t base, length;
     (void)min_lo_ram; (void)min_hi_ram;/* portably suppress compiler warning */
+    dma_protected_range_t lo_range;
+    dma_protected_range_t hi_range;
 
-    txt_heap_t* txt_heap = get_txt_heap();
-    os_sinit_data_t *os_sinit_data = get_os_sinit_data_start(txt_heap);
+    lo_range = get_dma_protect_info(LO_RANGE, NULL);
+    hi_range = get_dma_protect_info(HI_RANGE, NULL);
 
-    if ( max_lo_ram != (os_sinit_data->vtd_pmr_lo_base +
-                        os_sinit_data->vtd_pmr_lo_size) ) {
-        base = os_sinit_data->vtd_pmr_lo_base + os_sinit_data->vtd_pmr_lo_size;
+    if ( max_lo_ram != (lo_range.base +
+                        lo_range.size) ) {
+        base = lo_range.base + lo_range.size;
         length = max_lo_ram - base;
-        printk(TBOOT_INFO"reserving 0x%Lx - 0x%Lx, which was truncated for VT-d\n",
+        printk(TBOOT_INFO"reserving 0x%Lx - 0x%Lx, which was truncated for DMA protection\n",
                base, base + length);
         if ( !e820_reserve_ram(base, length) )
             return false;
@@ -260,11 +310,11 @@ static bool reserve_vtd_delta_mem(uint64_t min_lo_ram, uint64_t max_lo_ram,
            return false;
         }
     }
-    if ( max_hi_ram != (os_sinit_data->vtd_pmr_hi_base +
-                        os_sinit_data->vtd_pmr_hi_size) ) {
-        base = os_sinit_data->vtd_pmr_hi_base + os_sinit_data->vtd_pmr_hi_size;
+    if ( max_hi_ram != (hi_range.base +
+                        hi_range.size) ) {
+        base = hi_range.base + hi_range.size;
         length = max_hi_ram - base;
-        printk(TBOOT_INFO"reserving 0x%Lx - 0x%Lx, which was truncated for VT-d\n",
+        printk(TBOOT_INFO"reserving 0x%Lx - 0x%Lx, which was truncated for DMA protection\n",
                base, base + length);
         if ( !e820_reserve_ram(base, length) )
             return false;
@@ -276,10 +326,17 @@ static bool reserve_vtd_delta_mem(uint64_t min_lo_ram, uint64_t max_lo_ram,
     return true;
 }
 
-static bool verify_vtd_pmrs(txt_heap_t *txt_heap)
+static bool verify_dma_protection(txt_heap_t *txt_heap)
 {
-    os_sinit_data_t *os_sinit_data, tmp_os_sinit_data;
+    os_sinit_data_t *os_sinit_data;
+    os_sinit_data_t *tmp_os_sinit_data;
+    //If TPR is supported we'd need to add ext elements (tpr_req and end element)
+    uint8_t buffer[OS_SINIT_DATA_WITH_TPR_SIZE] = {0};
     uint64_t min_lo_ram, max_lo_ram, min_hi_ram, max_hi_ram;
+    dma_protected_range_t tmp_hi_range;
+    dma_protected_range_t tmp_lo_range;
+    dma_protected_range_t orig_hi_range;
+    dma_protected_range_t orig_lo_range;
 
     os_sinit_data = get_os_sinit_data_start(txt_heap);
 
@@ -291,61 +348,86 @@ static bool verify_vtd_pmrs(txt_heap_t *txt_heap)
     /* calculate what they should have been */
     /* no e820 table on S3 resume, so use saved (sealed) values */
     if ( s3_flag ) {
-        min_lo_ram = g_pre_k_s3_state.vtd_pmr_lo_base;
-        max_lo_ram = min_lo_ram + g_pre_k_s3_state.vtd_pmr_lo_size;
-        min_hi_ram = g_pre_k_s3_state.vtd_pmr_hi_base;
-        max_hi_ram = min_hi_ram + g_pre_k_s3_state.vtd_pmr_hi_size;
+        min_lo_ram = g_pre_k_s3_state.dma_protection_lo_base;
+        max_lo_ram = min_lo_ram + g_pre_k_s3_state.dma_protection_lo_size;
+        min_hi_ram = g_pre_k_s3_state.dma_protection_hi_base;
+        max_hi_ram = min_hi_ram + g_pre_k_s3_state.dma_protection_hi_size;
     }
     else {
-        if ( !get_ram_ranges(&min_lo_ram, &max_lo_ram,
-                             &min_hi_ram, &max_hi_ram) )
+        if ( !get_ram_ranges(&min_lo_ram, &max_lo_ram, &min_hi_ram, &max_hi_ram) ) {
             return false;
-
+        }
+        
         /* if vtd_pmr_lo/hi sizes rounded to 2MB granularity are less than the
            max_lo/hi_ram values determined from the e820 table, then we must
            reserve the differences in e820 table so that unprotected memory is
            not used by the kernel */
-        if ( !reserve_vtd_delta_mem(min_lo_ram, max_lo_ram, min_hi_ram,
+        if ( !reserve_dma_protected_delta_mem(min_lo_ram, max_lo_ram, min_hi_ram,
                                     max_hi_ram) ) {
-            printk(TBOOT_ERR"failed to reserve VT-d PMR delta memory\n");
+            printk(TBOOT_ERR"failed to reserve DMA protection delta memory\n");
             return false;
         }
     }
 
     /* compare to current values */
-    tb_memset(&tmp_os_sinit_data, 0, sizeof(tmp_os_sinit_data));
-    tmp_os_sinit_data.version = os_sinit_data->version;
-    set_vtd_pmrs(&tmp_os_sinit_data, min_lo_ram, max_lo_ram, min_hi_ram,
-                 max_hi_ram);
-    if ( (tmp_os_sinit_data.vtd_pmr_lo_base !=
-          os_sinit_data->vtd_pmr_lo_base) ||
-         (tmp_os_sinit_data.vtd_pmr_lo_size !=
-          os_sinit_data->vtd_pmr_lo_size) ||
-         (tmp_os_sinit_data.vtd_pmr_hi_base !=
-          os_sinit_data->vtd_pmr_hi_base) ||
-         (tmp_os_sinit_data.vtd_pmr_hi_size !=
-          os_sinit_data->vtd_pmr_hi_size) ) {
-        printk(TBOOT_ERR"OS to SINIT data VT-d PMR settings do not match:\n");
-        print_os_sinit_data_vtdpmr(&tmp_os_sinit_data);
-        print_os_sinit_data_vtdpmr(os_sinit_data);
-        return false;
+    tmp_os_sinit_data = (os_sinit_data_t *) buffer;
+    tmp_os_sinit_data->version = os_sinit_data->version;
+    //Add TPR element and END element:
+    if (g_tpr_support) {
+        heap_ext_data_element_t *elt = (heap_ext_data_element_t *) &tmp_os_sinit_data->ext_data_elts;
+        heap_tpr_req_element_t *tpr_req_elt = NULL;
+        elt->type = HEAP_EXTDATA_TYPE_TPR_REQ;
+        elt->size = sizeof(*elt) + offsetof(heap_tpr_req_element_t, tpr_req_arr) + (2 * sizeof(tpr_range_t));
+        tpr_req_elt = (heap_tpr_req_element_t *) elt->data;
+        tpr_req_elt->tpr_cnt = 2;
+        //Type, size and tpr count is enough, move to end element
+        elt = (void *) elt + elt->size;
+        elt->type = HEAP_EXTDATA_TYPE_END;
+        elt->size = sizeof(heap_ext_data_element_t); 
+    }
+    set_dma_protection(tmp_os_sinit_data, min_lo_ram, max_lo_ram, min_hi_ram, max_hi_ram);
+    //Get DMA protected ranges from tmp_os_sinit_data
+    tmp_lo_range = get_dma_protect_info(LO_RANGE, tmp_os_sinit_data);
+    tmp_hi_range = get_dma_protect_info(HI_RANGE, tmp_os_sinit_data);
+    //Get ranges from os_sinit_data in heap
+    orig_lo_range = get_dma_protect_info(LO_RANGE, NULL);
+    orig_hi_range = get_dma_protect_info(HI_RANGE, NULL);
+
+    //Compare ranges
+    if (
+        tmp_lo_range.base != orig_lo_range.base ||
+        tmp_lo_range.size != orig_lo_range.size ||
+        tmp_hi_range.base != orig_hi_range.base ||
+        tmp_hi_range.size != orig_hi_range.size
+        ) {
+            printk(TBOOT_ERR"OS to SINIT data DMA protection settings do not match:\n");
+            printk(TBOOT_DETA"Current low range base: 0x%Lx | Original low range base: 0x%LX\n", 
+                tmp_lo_range.base, orig_lo_range.base);
+            printk(TBOOT_DETA"Current low range size: 0x%Lx | Original low range size: 0x%LX\n", 
+                tmp_lo_range.size, orig_lo_range.size);
+            printk(TBOOT_DETA"Current high range base: 0x%Lx | Original high range base: 0x%LX\n", 
+                tmp_hi_range.base, orig_hi_range.base);
+            printk(TBOOT_DETA"Current high range size: 0x%Lx | Original high range size: 0x%LX\n", 
+                tmp_hi_range.size, orig_hi_range.size);
+            return false;
     }
 
     if ( !s3_flag ) {
         /* save the verified values so that they can be sealed for S3 */
-        g_pre_k_s3_state.vtd_pmr_lo_base = os_sinit_data->vtd_pmr_lo_base;
-        g_pre_k_s3_state.vtd_pmr_lo_size = os_sinit_data->vtd_pmr_lo_size;
-        g_pre_k_s3_state.vtd_pmr_hi_base = os_sinit_data->vtd_pmr_hi_base;
-        g_pre_k_s3_state.vtd_pmr_hi_size = os_sinit_data->vtd_pmr_hi_size;
+        g_pre_k_s3_state.dma_protection_lo_base = orig_lo_range.base;
+        g_pre_k_s3_state.dma_protection_lo_size = orig_lo_range.size;
+        g_pre_k_s3_state.dma_protection_hi_base = orig_hi_range.base;
+        g_pre_k_s3_state.dma_protection_hi_size = orig_hi_range.size;
     }
 
     return true;
 }
 
-void set_vtd_pmrs(os_sinit_data_t *os_sinit_data,
+void set_dma_protection(os_sinit_data_t *os_sinit_data,
                   uint64_t min_lo_ram, uint64_t max_lo_ram,
                   uint64_t min_hi_ram, uint64_t max_hi_ram)
 {
+    printk(TBOOT_DETA"Setting DMA protection\n");
     printk(TBOOT_DETA"min_lo_ram: 0x%Lx, max_lo_ram: 0x%Lx\n", min_lo_ram, max_lo_ram);
     printk(TBOOT_DETA"min_hi_ram: 0x%Lx, max_hi_ram: 0x%Lx\n", min_hi_ram, max_hi_ram);
 
@@ -357,16 +439,35 @@ void set_vtd_pmrs(os_sinit_data_t *os_sinit_data,
      * we want to protect all of usable mem so that any kernel allocations
      * before VT-d remapping is enabled are protected
      */
-
+    heap_tpr_req_element_t *tpr_req_elt = NULL;
+    tpr_req_elt = get_tpr_req_element(os_sinit_data);
+    if (g_tpr_support == true && tpr_req_elt == NULL) {
+        printk(TBOOT_ERR"failed to read TPR_REQ_ELEMENT from TXT HEAP.\n");
+        return;
+    }
+    if (g_tpr_support == true && tpr_req_elt->tpr_cnt != 2) {
+        printk(TBOOT_ERR"TPR_REQ_ELEMENT count is not 2.\n");
+        return;
+    }
     min_lo_ram &= ~0x1fffffULL;
     uint64_t lo_size = (max_lo_ram - min_lo_ram) & ~0x1fffffULL;
-    os_sinit_data->vtd_pmr_lo_base = min_lo_ram;
-    os_sinit_data->vtd_pmr_lo_size = lo_size;
+    if (g_tpr_support) {
+        tpr_req_elt->tpr_req_arr[0].tpr_range_base = min_lo_ram;
+        tpr_req_elt->tpr_req_arr[0].tpr_range_size = lo_size;
+    } else {
+        os_sinit_data->vtd_pmr_lo_base = min_lo_ram;
+        os_sinit_data->vtd_pmr_lo_size = lo_size;
+    }
 
     min_hi_ram &= ~0x1fffffULL;
     uint64_t hi_size = (max_hi_ram - min_hi_ram) & ~0x1fffffULL;
-    os_sinit_data->vtd_pmr_hi_base = min_hi_ram;
-    os_sinit_data->vtd_pmr_hi_size = hi_size;
+    if (g_tpr_support) {
+        tpr_req_elt->tpr_req_arr[1].tpr_range_base = min_hi_ram;
+        tpr_req_elt->tpr_req_arr[1].tpr_range_size = hi_size;
+    } else {
+        os_sinit_data->vtd_pmr_hi_base = min_hi_ram;
+        os_sinit_data->vtd_pmr_hi_size = hi_size;
+    }
 }
 
 tb_error_t txt_verify_platform(void)
@@ -424,7 +525,7 @@ tb_error_t txt_post_launch_verify_platform(void)
         return TB_ERR_POST_LAUNCH_VERIFICATION;
 
     /* verify that VT-d PMRs were really set as required */
-    if ( !verify_vtd_pmrs(txt_heap) )
+    if ( !verify_dma_protection(txt_heap) )
         return TB_ERR_POST_LAUNCH_VERIFICATION;
 
     return TB_ERR_NONE;
