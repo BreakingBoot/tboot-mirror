@@ -1,3 +1,8 @@
+20240405: v1.11.4
+		Increase the TBOOT log size from 32 KB to 64 KB. For some Intel server
+		platforms, it was noticed that TBOOT_SERIAL_LOG memory section was too
+		small to hold all of the print logs, produced by TBOOT. Due to this
+		reason TBOOT log section memory size had to be increase to 64KB.
 20240122: v1.11.3
 		Fix the hanging TBOOT issue, which appeared during the RLPs wakeup process
 		on the Intel's multisocket platform. This problem appeared during the AP
