@@ -1003,9 +1003,6 @@ bool verify_ec_signature(sized_buffer *data, sized_buffer *pubkey_x,
             if (point_buffer != NULL) {
                 OPENSSL_free((void *) point_buffer);
             }
-            if (curveName != NULL) {
-                OPENSSL_free((void *) curveName);
-            }
         #else
             if (ec_key != NULL) {
                 OPENSSL_free((void *) ec_key);
