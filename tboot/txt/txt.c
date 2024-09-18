@@ -518,7 +518,7 @@ bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
 __data uint32_t g_using_da = 0;
 __data acm_hdr_t *g_sinit = 0;
 
-static void configure_vtd(void)
+__attribute__((unused)) static void configure_vtd(void)
 {
     uint32_t remap_length;
     struct dmar_remapping *dmar_remap = vtd_get_dmar_remap(&remap_length);
@@ -839,7 +839,8 @@ tb_error_t txt_launch_environment(loader_ctx *lctx)
     if ( mle_ptab_base == NULL )
         return TB_ERR_FATAL;
 
-    configure_vtd();
+    printk(TBOOT_INFO"DEBUG DEBUG DEBUG skip DMA remapping disable\n");
+    //configure_vtd();
 
     /* initialize TXT heap */
     txt_heap = init_txt_heap(mle_ptab_base, g_sinit, lctx);
@@ -1177,6 +1178,7 @@ void txt_cpu_wakeup(void)
         return;
     }
 
+    printk(TBOOT_INFO"Mutex lock cpu %u\n", cpuid);
     mtx_enter(&ap_lock);
 
     printk(TBOOT_INFO"cpu %u waking up from TXT sleep\n", cpuid);

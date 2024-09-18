@@ -192,6 +192,16 @@ static void post_launch(void)
     if ( s3_flag  )    
          s3_launch();
 
+    printk(TBOOT_INFO"Post SINIT ACM check loader context:\n");
+    printk(TBOOT_INFO"g_ldr_ctx: %p\n", g_ldr_ctx);
+    print_loader_ctx(g_ldr_ctx);
+
+    printk(TBOOT_INFO"Post SINIT ACM E820 map:\n");
+    print_e820_map();
+    printk(TBOOT_INFO"Post SINIT ACM EFI memory map:\n");
+    efi_memmap_dump();
+
+
     /* remove all TXT sinit acm modules before verifying modules */
     remove_txt_modules(g_ldr_ctx);
 
@@ -379,6 +389,9 @@ void begin_launch(void *addr, uint32_t magic)
     printk(TBOOT_INFO"*********************** TBOOT ***********************\n");
     printk(TBOOT_INFO"   %s\n", TBOOT_CHANGESET);
     printk(TBOOT_INFO"*****************************************************\n");
+    printk(TBOOT_INFO"This tboot version supports TPR.\n");
+    printk(TBOOT_INFO"This tboot version tries to move SINIT in ldr_ctx v3.\n");
+    printk(TBOOT_INFO"This tboot version disables DMA remapping.\n");
 
     printk(TBOOT_INFO"command line: %s\n", g_cmdline);
     /* if telled to check revocation acm result, go with simplified path */
@@ -392,6 +405,20 @@ void begin_launch(void *addr, uint32_t magic)
        if (g_ldr_ctx->type == 2)
        print_loader_ctx(g_ldr_ctx);
     */
+
+    printk(TBOOT_INFO"Loader context at: %p\n", g_ldr_ctx);
+    print_loader_ctx(g_ldr_ctx);
+
+    /* 
+        GRUB can put SINIT.bin in memory before tboot, it should be moved to avoid 
+        overwriting tboot's memory
+    */
+    if (!is_launched()) {
+        printk(TBOOT_INFO"move modules above tboot.\n");
+        move_modules(g_ldr_ctx);
+        printk(TBOOT_INFO"Loader context after moving modules%p\n", g_ldr_ctx);
+        print_loader_ctx(g_ldr_ctx);
+    }
 
     /* clear resume vector on S3 resume so any resets will not use it */
     if ( !is_launched() && s3_flag )        set_s3_resume_vector(&_tboot_shared.acpi_sinfo, 0);
@@ -407,10 +434,10 @@ void begin_launch(void *addr, uint32_t magic)
     if ( !s3_flag ) {
         if ( !copy_e820_map(g_ldr_ctx) )  apply_policy(TB_ERR_FATAL);
         if (efi_memmap_copy(g_ldr_ctx)) {
-            if (get_tboot_dump_memmap()) {
-                printk(TBOOT_INFO"Original EFI memory map:\n");
-                efi_memmap_dump();
-            }
+            printk(TBOOT_INFO"Original EFI memory map:\n");
+            efi_memmap_dump();
+            printk(TBOOT_INFO"Original E820 memory map:\n");    
+            print_e820_map();
         }
     }
 
@@ -459,6 +486,11 @@ void begin_launch(void *addr, uint32_t magic)
     apply_policy(err);
 
     /* ensure there are modules */
+    if (is_launched()) {
+        printk(TBOOT_INFO"Post SINIT ACM check loader context:\n");
+        printk(TBOOT_INFO"g_ldr_ctx: %p\n", g_ldr_ctx);
+        print_loader_ctx(g_ldr_ctx);
+    }
     if ( !s3_flag && !verify_loader_context(g_ldr_ctx) )
         apply_policy(TB_ERR_FATAL);
 

@@ -268,6 +268,48 @@ bool efi_memmap_reserve(uint64_t base, uint64_t length)
     return true;
 }
 
+static const char *efi_mem_type_to_str(uint32_t type)
+{
+    switch (type)
+    {
+        case EFI_RESERVED_TYPE:
+            return "EFI_RESERVED_TYPE";
+        case EFI_LOADER_CODE:
+            return "EFI_LOADER_CODE";
+        case EFI_LOADER_DATA:
+            return "EFI_LOADER_DATA";
+        case EFI_BOOT_SERVICES_CODE:
+            return "EFI_BOOT_SERVICES_CODE";
+        case EFI_BOOT_SERVICES_DATA:
+            return "EFI_BOOT_SERVICES_DATA";
+        case EFI_RUNTIME_SERVICES_CODE:
+            return "EFI_RUNTIME_SERVICES_CODE";
+        case EFI_RUNTIME_SERVICES_DATA:
+            return "EFI_RUNTIME_SERVICES_DATA";
+        case EFI_CONVENTIONAL_MEMORY:
+            return "EFI_CONVENTIONAL_MEMORY";
+        case EFI_UNUSABLE_MEMORY:
+            return "EFI_UNUSABLE_MEMORY";
+        case EFI_ACPI_RECLAIM_MEMORY:
+            return "EFI_ACPI_RECLAIM_MEMORY";
+        case EFI_ACPI_MEMORY_NVS:
+            return "EFI_ACPI_MEMORY_NVS";
+        case EFI_MEMORY_MAPPED_IO:
+            return "EFI_MEMORY_MAPPED_IO";
+        case EFI_MEMORY_MAPPED_IO_PORT_SPACE:
+            return "EFI_MEMORY_MAPPED_IO_PORT_SPACE";
+        case EFI_PAL_CODE:
+            return "EFI_PAL_CODE";
+        case EFI_PERSISTENT_MEMORY:
+            return "EFI_PERSISTENT_MEMORY";
+        case EFI_MAX_MEMORY_TYPE:
+            return "EFI_MAX_MEMORY_TYPE";
+        default:
+            return "Unknown type";
+    }
+}
+
+
 /**
  * @brief Print whole memory map
  */
@@ -275,10 +317,11 @@ void efi_memmap_dump(void)
 {
     efi_mem_descr_t* desc = NULL;
     while ((desc = efi_memmap_walk(desc)) != NULL) {
-        printk(TBOOT_INFO" %016llx - %016llx (%-2d | 0x%llx)\n",
+        printk(TBOOT_INFO" %016llx - %016llx (%-2d | 0x%llx | %s)\n",
                desc->physical_start,
                desc->physical_start + (desc->num_pages << EFI_PAGE_SHIFT),
-               desc->type, desc->attribute);
+               desc->type, desc->attribute,
+               efi_mem_type_to_str(desc->type));
     }
 }
 

@@ -104,6 +104,7 @@ extern bool get_loader_efi_ptr(loader_ctx *lctx, uint32_t *address,
 extern bool load_framebuffer_info(loader_ctx *lctx, void *vscr, bool efifb);
 extern char *get_first_module_cmd(loader_ctx *lctx);
 extern struct mb2_fb* get_framebuffer_info(loader_ctx *lctx);
+extern void move_modules(loader_ctx *lctx);
 
 #endif /* __LOADER_H__ */
 

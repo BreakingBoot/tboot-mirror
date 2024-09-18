@@ -81,6 +81,28 @@ static inline uint64_t e820_length_64(memory_map_t *entry)
     return combine64b(entry->length_low, entry->length_high);
 }
 
+static const char *e820_mem_type_to_str(uint32_t type)
+{
+    switch (type)
+    {
+    case E820_RAM:
+        return "E820_RAM";
+    case E820_RESERVED:
+        return "E820_RESERVED";
+    case E820_ACPI:
+        return "E820_ACPI";
+    case E820_NVS:
+        return "E820_NVS";
+    case E820_UNUSABLE:
+        return "E820_UNUSABLE";
+    case E820_PMEM:
+        return "E820_PMEM";
+    default:
+        return "unknown type";
+    }
+}
+
+
 
 /*
  * print_e820_map
@@ -97,10 +119,11 @@ static void print_map(memory_map_t *e820, int nr_map)
         base_addr = e820_base_64(entry);
         length = e820_length_64(entry);
 
-        printk(TBOOT_DETA"\t%016Lx - %016Lx  (%d)\n",
+        printk(TBOOT_DETA"\t%016Lx - %016Lx  (%d - %s)\n",
                (unsigned long long)base_addr,
                (unsigned long long)(base_addr + length),
-               entry->type);
+               entry->type,
+               e820_mem_type_to_str(entry->type));
     }
 }
 
@@ -296,8 +319,8 @@ bool copy_e820_map(loader_ctx *lctx)
     if (have_loader_memmap(lctx)){
         uint32_t memmap_length = get_loader_memmap_length(lctx);
         memory_map_t *memmap = get_loader_memmap(lctx);
-        printk(TBOOT_DETA"original e820 map:\n");
-        print_map(memmap, memmap_length/sizeof(memory_map_t));
+        //printk(TBOOT_DETA"original e820 map:\n");
+        //print_map(memmap, memmap_length/sizeof(memory_map_t));
 
         uint32_t entry_offset = 0;
 

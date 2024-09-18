@@ -56,6 +56,10 @@
 #define E820_UNUSABLE       5
 #endif
 
+#ifndef E820_PMEM
+#define E820_PMEM           7
+#endif
+
 /* these are only used by e820_check_region() */
 #define E820_MIXED          ((uint32_t)-1 - 1)
 #define E820_GAP            ((uint32_t)-1)

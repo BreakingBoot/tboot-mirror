@@ -731,7 +731,7 @@ extern unsigned long get_tboot_mem_end(void);
 
 static bool below_tboot(unsigned long addr)
 {
-    return addr >= 0x100000 && addr < TBOOT_BASE_ADDR;
+    return addr < TBOOT_BASE_ADDR;
 }
 
 static unsigned long max(unsigned long a, unsigned long b)
@@ -1089,29 +1089,42 @@ static uint32_t get_highest_mod_end(loader_ctx *lctx)
 /*
  * Move any mbi components/modules/mbi that are below tboot to just above tboot
  */
-static void
-move_modules(loader_ctx *lctx)
+void move_modules(loader_ctx *lctx)
 {
     if (LOADER_CTX_BAD(lctx))
         return;
 
     unsigned long lowest = get_lowest_mod_start_below_tboot(lctx);
     unsigned long from = 0;
+    unsigned long tboot_mem_end = 0;
 
     if ( below_tboot(lowest) )
         from = lowest;
     else
+    {
         if ( below_tboot((unsigned long)lctx->addr) )
             from = (unsigned long)lctx->addr;
         else
+        {
+            printk(TBOOT_INFO"No module below tboot, all good.\n");
             return;
+        }
+    }
 
     unsigned long highest = get_highest_mod_end(lctx);
+    printk(TBOOT_INFO"Highest mod end: 0x%lx\n", highest);
     unsigned long to = PAGE_UP(highest);
+    printk(TBOOT_INFO"Initial mod destination: 0x%lx\n", to);
 
-    if ( to < get_tboot_mem_end() )
-        to = get_tboot_mem_end();
 
+    tboot_mem_end = get_tboot_mem_end();
+    printk(TBOOT_INFO"TBOOT memory end: 0x%lx\n", tboot_mem_end);
+    if ( to < tboot_mem_end )
+    {
+        to = tboot_mem_end;
+        printk(TBOOT_INFO"New module destination: 0x%lx\n", to);
+    }
+    
     /*
      * assuming that all of the members of mbi (e.g. cmdline, 
      * syms.aout_image.addr, etc.) are contiguous with the mbi structure
