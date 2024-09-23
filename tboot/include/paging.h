@@ -36,9 +36,9 @@
 #ifndef __PAGING_H__
 #define __PAGING_H__
 
-/* direct map starts from 0, size 64M */
+/* direct map starts from 0, size 128M */
 #define DIRECTMAP_VIRT_START	0
-#define DIRECTMAP_VIRT_ORDER	26
+#define DIRECTMAP_VIRT_ORDER	27
 #define DIRECTMAP_VIRT_SIZE	(1UL << DIRECTMAP_VIRT_ORDER)
 #define DIRECTMAP_VIRT_END	(DIRECTMAP_VIRT_START + DIRECTMAP_VIRT_SIZE)
 
