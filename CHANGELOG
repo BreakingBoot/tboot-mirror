@@ -1,7 +1,9 @@
+20240924: v1.11.6
+		Merge TXT Protected Range support branch.
 20240918: v1.11.5
-		Add TXT Protected Range support. Remove unncessary OPENSSL_free from lcputils.c
-		and add a functionality to move ACM modules from the address range below TBOOT
-		to above TBOOT, to allow the usage of ACMs bigger than 256KB.
+		Remove unncessary OPENSSL_free from lcputils.c and add a functionality 
+		to move ACM modules from the address range below TBOOT to above TBOOT,
+		to allow the usage of ACMs bigger than 256KB.
 20240405: v1.11.4
 		Increase the TBOOT log size from 32 KB to 64 KB. For some Intel server
 		platforms, it was noticed that TBOOT_SERIAL_LOG memory section was too
