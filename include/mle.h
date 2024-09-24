@@ -52,7 +52,9 @@ typedef union {
         uint32_t  max_phy_addr        : 1;
         uint32_t  tcg_event_log_format: 1;
         uint32_t  cbnt_supported      : 1;
-        uint32_t  reserved1           : 21;
+        uint32_t  reserved1           : 3;
+        uint32_t  tpr_support         : 1;
+        uint32_t  reserved2           : 17;
     };
 } txt_caps_t;
 
@@ -80,10 +82,13 @@ typedef struct {
 /*
  * values supported by current version of tboot
  */
-#define MLE_HDR_VER       0x00020001     /* 2.1 */
-#define MLE_HDR_CAPS      0x000000627     /* rlp_wake_{getsec, monitor} = 1,
-                                            ecx_pgtbl = 1, nolg = 0, da = 1
-                                            tcg_event_log_format = 1, cbnt_supported = 1 */
+#define MLE_HDR_VER       0x00020003     /* 2.3 */
+
+#define MLE_HDR_CAPS      0x000004627 /* rlp_wake_{getsec, monitor} = 1
+                                       * ecx_pgtbl = 1, nolg = 0, da = 1
+                                       *  tcg_event_log_format = 1, cbnt_supported = 1 
+                                       *  tpr_supported = 1 
+                                       */
 
 #endif      /* __MLE_H__ */
 

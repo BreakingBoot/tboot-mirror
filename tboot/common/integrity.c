@@ -108,10 +108,10 @@ static void print_pre_k_s3_state(void)
     struct tpm_if *tpm = get_tpm();
     
     printk(TBOOT_DETA"pre_k_s3_state:\n");
-    printk(TBOOT_DETA"\t vtd_pmr_lo_base: 0x%Lx\n", g_pre_k_s3_state.vtd_pmr_lo_base);
-    printk(TBOOT_DETA"\t vtd_pmr_lo_size: 0x%Lx\n", g_pre_k_s3_state.vtd_pmr_lo_size);
-    printk(TBOOT_DETA"\t vtd_pmr_hi_base: 0x%Lx\n", g_pre_k_s3_state.vtd_pmr_hi_base);
-    printk(TBOOT_DETA"\t vtd_pmr_hi_size: 0x%Lx\n", g_pre_k_s3_state.vtd_pmr_hi_size);
+    printk(TBOOT_DETA"\t dma_protection_lo_base: 0x%Lx\n", g_pre_k_s3_state.dma_protection_lo_base);
+    printk(TBOOT_DETA"\t dma_protection_lo_size: 0x%Lx\n", g_pre_k_s3_state.dma_protection_lo_size);
+    printk(TBOOT_DETA"\t dma_protection_hi_base: 0x%Lx\n", g_pre_k_s3_state.dma_protection_hi_base);
+    printk(TBOOT_DETA"\t dma_protection_hi_size: 0x%Lx\n", g_pre_k_s3_state.dma_protection_hi_size);
     printk(TBOOT_DETA"\t pol_hash: ");
     print_hash(&g_pre_k_s3_state.pol_hash, tpm->cur_alg);
     printk(TBOOT_DETA"\t VL measurements:\n");

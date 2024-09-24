@@ -307,6 +307,7 @@ static void init_os_sinit_ext_data(heap_ext_data_element_t* elts)
 {
     heap_ext_data_element_t* elt = elts;
     heap_event_log_ptr_elt_t* evt_log;
+    heap_tpr_req_element_t* tpr_elt = NULL;
     struct tpm_if *tpm = get_tpm();
  
     int log_type = get_evtlog_type();
@@ -334,7 +335,18 @@ static void init_os_sinit_ext_data(heap_ext_data_element_t* elts)
             g_elog_2->count * sizeof(heap_event_log_descr_t);
         printk(TBOOT_DETA"INTEL TXT LOG elt SIZE = %d \n", elt->size);
     }
-
+    if (g_tpr_support) {
+        //Go to next elt
+        elt = (void *)elt + elt->size;
+        //Allocate space for 2 TPR ranges, one in LO RAM and the other in HI RAM
+        elt->type = HEAP_EXTDATA_TYPE_TPR_REQ;
+        elt->size = sizeof(*elt) + offsetof(heap_tpr_req_element_t, tpr_req_arr) + (2 * sizeof(tpr_range_t));
+        printk(TBOOT_DETA"heap_ext_data_element TYPE = %d \n", elt->type);
+        printk(TBOOT_DETA"heap_ext_data_element SIZE = %d \n", elt->size);
+        tpr_elt = (heap_tpr_req_element_t *) &elt->data;
+        tpr_elt->tpr_cnt = 2;
+    }
+    //Update END element
     elt = (void *)elt + elt->size;
     elt->type = HEAP_EXTDATA_TYPE_END;
     elt->size = sizeof(*elt);
@@ -517,6 +529,7 @@ bool evtlog_append(uint8_t pcr, hash_list_t *hl, uint32_t type)
 
 __data uint32_t g_using_da = 0;
 __data acm_hdr_t *g_sinit = 0;
+__data bool g_tpr_support = 0;
 
 __attribute__((unused)) static void configure_vtd(void)
 {
@@ -607,14 +620,20 @@ static txt_heap_t *init_txt_heap(void *ptab_base, acm_hdr_t *sinit, loader_ctx *
     /* this is linear addr (offset from MLE base) of mle header */
     os_sinit_data->mle_hdr_base = (uint64_t)(unsigned long)&g_mle_hdr -
         (uint64_t)(unsigned long)&_mle_start;
-    /* VT-d PMRs */
+    /* VT-d PMRs / TPRs */
     uint64_t min_lo_ram, max_lo_ram, min_hi_ram, max_hi_ram;
     
     if ( !get_ram_ranges(&min_lo_ram, &max_lo_ram, &min_hi_ram, &max_hi_ram) )
         return NULL;
 
-    set_vtd_pmrs(os_sinit_data, min_lo_ram, max_lo_ram, min_hi_ram,
+    /* Extended elements initialization for TPM elog and TPRs*/
+    if ( os_sinit_data->version >= 6 ) {
+        init_os_sinit_ext_data(os_sinit_data->ext_data_elts);
+    }
+
+    set_dma_protection(os_sinit_data, min_lo_ram, max_lo_ram, min_hi_ram,
                  max_hi_ram);
+
     /* LCP owner policy data */
     void *lcp_base = NULL;
     uint32_t lcp_size = 0;
@@ -703,10 +722,6 @@ static txt_heap_t *init_txt_heap(void *ptab_base, acm_hdr_t *sinit, loader_ctx *
         os_sinit_data->capabilities.pcr_map_da = 0;
         g_using_da = 1;
     }
-
-    /* Event log initialization */
-    if ( os_sinit_data->version >= 6 )
-        init_os_sinit_ext_data(os_sinit_data->ext_data_elts);
 
     print_os_sinit_data(os_sinit_data);
 
@@ -807,6 +822,21 @@ bool txt_is_launched(void)
     sts._raw = read_pub_config_reg(TXTCR_STS);
 
     return sts.senter_done_sts;
+}
+
+bool is_tpr_supported(void)
+{
+    //Reads SINIT ACM capabilities field and returns tpr_support bit
+    //Needs g_sinit to be set.
+    txt_caps_t sinit_caps;
+
+    sinit_caps._raw = 0;
+
+    if (g_sinit != NULL) {
+        sinit_caps = get_sinit_capabilities(g_sinit);
+    }
+
+    return sinit_caps.tpr_support;
 }
 
 tb_error_t txt_launch_environment(loader_ctx *lctx)

@@ -385,7 +385,7 @@ void begin_launch(void *addr, uint32_t magic)
     } else {
         printk_init(false);
     }
-
+    //TBOOT_CHANGESET is defined in CFLAGS in config.mk
     printk(TBOOT_INFO"*********************** TBOOT ***********************\n");
     printk(TBOOT_INFO"   %s\n", TBOOT_CHANGESET);
     printk(TBOOT_INFO"*****************************************************\n");
@@ -455,6 +455,10 @@ void begin_launch(void *addr, uint32_t magic)
            apply_policy(TB_ERR_ACMOD_VERIFY_FAILED);
     }
     
+    //We need to have g_sinit point to SINIT ACM before we can run is_tpr_supported
+    //This global variable decides whether PMR or TPR is used
+    g_tpr_support = is_tpr_supported();
+
     /* make TPM ready for measured launch */
     if (!tpm_detect())
        apply_policy(TB_ERR_TPM_NOT_READY);
