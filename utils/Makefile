@@ -13,7 +13,7 @@ include $(ROOTDIR)/Config.mk
 
 TARGETS := txt-stat txt-parse_err txt-acminfo
 
-CFLAGS += -D_LARGEFILE64_SOURCE
+CFLAGS += -D_LARGEFILE64_SOURCE -Wno-format -Wno-format-security
 LIBS += $(ROOTDIR)/safestringlib/libsafestring.a
 
 #
