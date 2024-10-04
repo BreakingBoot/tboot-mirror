@@ -1,3 +1,8 @@
+20241004: v1.11.8
+		Increase DIRECTMAP size from 64 MB to 128 MB. During the last TBOOT MLE
+		verification process for the Intel ARL-S (Arrowlake) CPUs, it was noticed
+		that MLE threw FATAL ERROR, because TBOOT pages exceeded the maximal
+		memory size, which can be mapped by the DIRECTMAP pages.
 20240925: v1.11.7
 		Workaround to make utils buildable.
 20240924: v1.11.6
