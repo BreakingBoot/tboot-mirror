@@ -531,7 +531,7 @@ __data uint32_t g_using_da = 0;
 __data acm_hdr_t *g_sinit = 0;
 __data bool g_tpr_support = 0;
 
-__attribute__((unused)) static void configure_vtd(void)
+static void configure_vtd(void)
 {
     uint32_t remap_length;
     struct dmar_remapping *dmar_remap = vtd_get_dmar_remap(&remap_length);
@@ -869,8 +869,7 @@ tb_error_t txt_launch_environment(loader_ctx *lctx)
     if ( mle_ptab_base == NULL )
         return TB_ERR_FATAL;
 
-    printk(TBOOT_INFO"DEBUG DEBUG DEBUG skip DMA remapping disable\n");
-    //configure_vtd();
+    configure_vtd();
 
     /* initialize TXT heap */
     txt_heap = init_txt_heap(mle_ptab_base, g_sinit, lctx);
