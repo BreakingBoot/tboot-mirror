@@ -31,5 +31,5 @@ jobs:
     - name: Push to GitHub mirror repo
       run: |
         cd tboot-mirror
-        git remote add mirror https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/breakingboot/tboot-mirror.git
-        git push mirror --mirror
+        git remote add mirror https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/BreakingBoot/tboot-mirror.git
+        git push mirror --all
