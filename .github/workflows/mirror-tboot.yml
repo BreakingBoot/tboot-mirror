@@ -20,10 +20,8 @@ jobs:
 
     - name: Clone git-remote-hg
       run: |
-        git clone https://github.com/felipec/git-remote-hg.git
-        cd git-remote-hg
-        make
-        sudo make install
+        curl https://raw.githubusercontent.com/felipec/git-remote-hg/master/git-remote-hg -o ~/bin/git-remote-hg
+        chmod +x ~/bin/git-remote-hg
 
     - name: Clone Mercurial repo via git-remote-hg
       run: |
