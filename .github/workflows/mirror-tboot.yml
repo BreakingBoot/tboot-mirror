@@ -26,7 +26,7 @@ jobs:
     - name: Clone Mercurial repo via git-remote-hg
       run: |
         export GIT_REMOTE_HG=1
-        git clone hg::http://http://hg.code.sf.net/p/tboot/code tboot-mirror
+        git clone hg::http://hg.code.sf.net/p/tboot/code tboot-mirror
 
     - name: Push to GitHub mirror repo
       run: |
