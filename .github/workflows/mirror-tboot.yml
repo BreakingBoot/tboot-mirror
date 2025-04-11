@@ -1,0 +1,37 @@
+name: Mirror Mercurial Repo to Git
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # every Monday
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mercurial python3-pip make
+        pip3 install dulwich
+        git config --global user.name "GitHub Action"
+        git config --global user.email "action@github.com"
+
+    - name: Clone git-remote-hg
+      run: |
+        git clone https://github.com/felipec/git-remote-hg.git
+        cd git-remote-hg
+        make
+        sudo make install
+
+    - name: Clone Mercurial repo via git-remote-hg
+      run: |
+        export GIT_REMOTE_HG=1
+        git clone hg::http://http://hg.code.sf.net/p/tboot/code tboot-mirror
+
+    - name: Push to GitHub mirror repo
+      run: |
+        cd tboot-mirror
+        git remote add https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/breakingboot/tboot-mirror.git
+        git push --mirror
