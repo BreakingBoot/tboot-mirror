@@ -1207,7 +1207,6 @@ void txt_cpu_wakeup(void)
         return;
     }
 
-    printk(TBOOT_INFO"Mutex lock cpu %u\n", cpuid);
     mtx_enter(&ap_lock);
 
     printk(TBOOT_INFO"cpu %u waking up from TXT sleep\n", cpuid);
